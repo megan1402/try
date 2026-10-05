@@ -1,0 +1,9 @@
+# SignalForge — runtime dependencies (Phase 1: Market Data Foundation)
+#
+# Only libraries the application itself imports. Development tooling (linters,
+# type checkers, pytest) lives in requirements-dev.txt. Later phases (SEC
+# ingestion, Hugging Face, pgvector, LangGraph, FastAPI, ...) will add their
+# own dependencies when they are actually needed.
+
+pandas>=2.0
+yfinance>=0.2.40

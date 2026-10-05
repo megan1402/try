@@ -1,0 +1,9 @@
+# SignalForge — development dependencies.
+#
+# Install together with the runtime requirements:
+#   pip install -r backend/requirements.txt -r backend/requirements-dev.txt
+
+pytest>=8.0
+ruff>=0.6
+mypy>=1.11
+pandas-stubs>=2.2  # real type information for pandas, used by mypy

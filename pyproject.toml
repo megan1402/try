@@ -1,0 +1,56 @@
+# Tool configuration for SignalForge.
+#
+# Configuration only: the project is a plain package (`backend/app`) that is
+# run in place rather than installed, so there is deliberately no `[project]`
+# table here yet. Packaging metadata arrives when there is something to ship.
+
+# ---------------------------------------------------------------------------
+# pytest
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-q --strict-markers --strict-config"
+
+# ---------------------------------------------------------------------------
+# ruff — linter and formatter (replaces flake8, isort and black)
+# ---------------------------------------------------------------------------
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+src = ["backend", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes (unused imports, undefined names, ...)
+    "I",   # import sorting
+    "UP",  # pyupgrade (modern syntax for the target Python)
+    "B",   # flake8-bugbear (likely bugs)
+    "SIM", # flake8-simplify
+    "C4",  # flake8-comprehensions
+    "RET", # flake8-return
+]
+ignore = [
+    "E501", # line length is enforced by the formatter, not the linter
+]
+
+# ---------------------------------------------------------------------------
+# mypy — static type checking of the application package
+# ---------------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.11"
+files = ["backend/app"]
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+no_implicit_optional = true
+check_untyped_defs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+show_error_codes = true
+
+# yfinance ships no type information, so silence "missing stubs" for it only.
+[[tool.mypy.overrides]]
+module = ["yfinance.*"]
+ignore_missing_imports = true

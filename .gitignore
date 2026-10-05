@@ -1,0 +1,41 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# --- Virtual environments ---
+.venv/
+venv/
+env/
+
+# --- Test / tooling caches ---
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# --- Jupyter ---
+.ipynb_checkpoints/
+
+# --- Secrets / local config ---
+.env
+.env.*
+!.env.example
+
+# --- macOS ---
+.DS_Store
+
+# --- Editors ---
+.idea/
+.vscode/
+
+# --- Project data ---
+# Track the folder itself but ignore its (potentially large) contents.
+data/*
+!data/.gitkeep
