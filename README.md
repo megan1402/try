@@ -4,7 +4,7 @@
 engineering (NLP, embeddings, retrieval, LLM reasoning, evaluation) with
 quantitative finance (market data, forward returns, historical analogues).
 
-> Status: **Phase 1 — Market Data Foundation**.
+> Status: **Phases 1–2 — Market data foundation + SEC EDGAR ingestion**.
 
 ---
 
@@ -51,9 +51,32 @@ Phase 1 is the market-data foundation only:
 - A runnable smoke-test example, plus pytest tests for the return maths.
 - Quality gates: lint + format (`ruff`), static types (`mypy`), `pytest`, and CI.
 
-Deliberately **not** included yet: SEC ingestion, Hugging Face models,
-LangChain / LangGraph, LLM APIs, vector databases, PostgreSQL, Docker, AWS and
-frontend frameworks.
+Phase 1 deliberately stops there — no filings, models, databases or services.
+
+---
+
+## What Phase 2 implements
+
+Phase 2 adds SEC EDGAR ingestion:
+
+- Resolve a **ticker to a CIK** using EDGAR's `company_tickers.json`.
+- List a company's **10-K / 10-Q filings**, newest first, with form type,
+  filing date, report date, acceptance timestamp, accession number and
+  document URL.
+- **Download and store** the raw filing document under `data/raw/sec/`.
+- 39 pytest tests driven by saved fixtures — **no network access**.
+
+Two real-world details worth knowing:
+
+- EDGAR requires a `User-Agent` containing a contact address, or it returns
+  `403`. See *Credentials for Phase 2* above.
+- The **acceptance timestamp** is the precise moment EDGAR accepted a filing.
+  It is usually *after the market close*, so it — not `filing_date` — is what
+  later phases must use to decide whether information existed at a point in
+  time.
+
+Deliberately **not** included yet: Hugging Face models, LangChain / LangGraph,
+LLM APIs, vector databases, PostgreSQL, Docker, AWS and frontend frameworks.
 
 ---
 
@@ -69,14 +92,17 @@ frontend frameworks.
 │       ├── __init__.py
 │       ├── ingestion/
 │       │   ├── __init__.py
-│       │   └── market.py        # retrieve historical OHLCV data
+│       │   ├── market.py        # Phase 1: historical OHLCV data
+│       │   └── sec.py           # Phase 2: SEC EDGAR filings
 │       └── quant/
 │           ├── __init__.py
 │           └── returns.py       # forward-return calculations
 ├── data/                        # local data (contents are git-ignored)
 ├── tests/
+│   ├── fixtures/                # saved EDGAR JSON responses (offline tests)
 │   ├── test_market.py
-│   └── test_returns.py
+│   ├── test_returns.py
+│   └── test_sec.py
 ├── conftest.py                  # puts backend/ on sys.path for pytest
 ├── pyproject.toml               # ruff / mypy / pytest configuration
 ├── Makefile                     # developer entry points
@@ -92,19 +118,33 @@ frontend frameworks.
 ---
 
 ## Setup
-Option A — one command does everything
+
+Requires **Python 3.11+**.
+
+```bash
+# Option A — one command does everything
 make setup
 
 # Option B — by hand
 python3 -m venv .venv
 source .venv/bin/activate          # macOS / Linux
 # .venv\Scripts\activate           # Windows
-pip install -r backend/requirements.txt -r backend/requirements-dev# macOS / Linux
-# .venv\Scripts\activate           # Windows
-
-# 2. Install dependencies
-pip install -r backend/requirements.txt
+pip install -r backend/requirements.txt -r backend/requirements-dev.txt
 ```
+
+---
+
+## Credentials for Phase 2 (SEC EDGAR)
+
+EDGAR rejects requests whose `User-Agent` does not identify a real contact.
+Export one before running the SEC example:
+
+```bash
+export SEC_USER_AGENT="Your Name your@email.com"
+```
+
+`company_tickers.json` also lives on `www.sec.gov`, so the same header is needed
+for the ticker lookup. Nothing else in the project needs credentials.
 
 ---
 
@@ -123,6 +163,23 @@ prints the last 10 rows.
 
 ---
 
+## Run the SEC EDGAR example
+
+Set a contact address first (see *Credentials* above), then:
+
+```bash
+export SEC_USER_AGENT="Your Name your@email.com"
+
+make run-sec             # or, by hand:
+cd backend
+python -m app.ingestion.sec
+```
+
+This resolves `NVDA` to its CIK, lists the recent 10-K / 10-Q filings, then
+downloads and saves the most recent one into `data/raw/sec/`.
+
+---
+
 ## Run the tests
 
 From the repository root, with the virtual environment active:
@@ -131,7 +188,8 @@ From the repository root, with the virtual environment active:
 pytest          # or: make test
 ```
 
-The tests build small hand-written DataFrames and never touch the network.
+The tests build small hand-written DataFrames (Phase 1) or replay saved EDGAR
+JSON fixtures (Phase 2). **No test touches the network.**
 
 ---
 
@@ -146,7 +204,8 @@ make check      # lint -> format check -> typecheck -> tests
 | Command | What it does |
 |---|---|
 | `make setup` | Create `.venv` and install all dependencies |
-| `make run` | Run the NVDA market-data example |
+| `make run` | Run the Phase 1 market-data example |
+| `make run-sec` | Run the Phase 2 SEC EDGAR example |
 | `make test` | Run the test suite |
 | `make lint` | `ruff check` + `ruff format --check` (no edits) |
 | `make format` | Auto-fix lint issues and reformat in place |
@@ -186,7 +245,8 @@ the past and silently invalidate every later evaluation.
 
 ---
 
-## Next up (Phase 2 — not started)
+## Next up (Phase 3 — not started)
 
-SEC EDGAR ingestion: download 10-K / 10-Q filings and store the raw documents,
-ready for event extraction in a later phase.
+Event extraction: turn raw filing text into structured financial events
+(earnings beat/miss, guidance changes, acquisitions, management changes, ...).
+This is where Hugging Face models and evaluation first appear.

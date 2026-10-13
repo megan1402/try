@@ -34,8 +34,11 @@ typecheck: ## Run static type checking
 
 check: lint typecheck test ## Run every gate CI runs, in the same order
 
-run: ## Run the NVDA market-data example
+run: ## Run the Phase 1 NVDA market-data example
 	cd backend && ../$(PY) -m app.ingestion.market
+
+run-sec: ## Run the Phase 2 SEC EDGAR example
+	cd backend && ../$(PY) -m app.ingestion.sec
 
 clean: ## Remove caches and build artefacts
 	rm -rf .pytest_cache .mypy_cache .ruff_cache
