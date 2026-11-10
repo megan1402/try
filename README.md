@@ -81,9 +81,10 @@ LLM APIs, vector databases, PostgreSQL, Docker, AWS and frontend frameworks.
 
 ---
 
-## What Phase 3 implements (in progress)
+## What Phase 3 and the event study implement (in progress)
 
-Phase 3 turns filing documents into structured text. The first slice is done:
+Phase 3 turns filing documents into structured events; the event study is the
+first place those events meet prices.
 
 - **Filing index** (`app/ingestion/store.py`) — every listed filing recorded in
   a local SQLite database under `data/index/`, keyed by accession number, with
@@ -95,9 +96,45 @@ Phase 3 turns filing documents into structured text. The first slice is done:
 - **Section splitting** (`app/extraction/sections.py`) — text split into Parts
   and Items (`part_ii_item_1a` is *Risk Factors*), with character offsets so a
   later citation can point at the exact passage.
+- **Event detection** (`app/extraction/events.py`) — a **rule-based baseline**:
+  regexes for guidance raise/cut, beat/miss, acquisitions, divestitures,
+  management changes, restructuring and legal or regulatory language. Every
+  event carries a fixed confidence, absolute character offsets and a
+  timezone-aware `as_of` (EDGAR's `acceptance_datetime`) — an event without a
+  precise instant cannot be used for point-in-time analysis.
+- **Event study** (`app/quant/event_study.py`) — attaches forward returns to
+  events and summarises them per event type: count, median, mean, hit rate and
+  a t-statistic.
 
-Still to come in Phase 3: structured events (earnings beat/miss, guidance
-changes, acquisitions, ...) and a labelled golden set to evaluate them.
+The baseline is deliberately dumb. It reads *"an acquisition could harm us"* in
+Risk Factors as an acquisition, and says so in its confidence weights. That is
+the point: a deterministic, fully explained floor for a model to beat — and the
+thing a labelled golden set has to measure.
+
+### Where the return clock starts
+
+The file is accepted *after* the close — typically ~20:00–22:00 UTC — so the
+last price that could **not** have reacted to it is that session's close. Each
+event is therefore anchored on the **last session whose close precedes the
+acceptance timestamp**, and the already-computed forward returns from that close
+are reused. A 21:00 acceptance anchors on the same session; a 10:00 one anchors
+on the previous session, so the whole of the following day counts as reaction.
+
+Two mistakes this design rules out:
+
+- anchoring on the *next* session, which silently discards the overnight gap
+  where most of the reaction happens;
+- dating the event by `filing_date` and counting a return that begins *before*
+  the news, which is look-ahead bias: trading on information you do not have.
+
+Anchoring at or before the close does not claim you could have traded at that
+close; it only fixes the window in which the market digested the news. Events
+whose nearest earlier session is more than a week away, or that fall outside the
+price history, get no anchor and are reported as `NaN` rather than borrowing a
+stale close.
+
+Still to come: a labelled golden set (precision/recall/F1 per event class),
+Hugging Face models measured against this baseline, and embeddings + retrieval.
 
 Two details the extraction code has to fight, both of which the tests cover:
 
@@ -123,6 +160,7 @@ Two details the extraction code has to fight, both of which the tests cover:
 │       ├── __init__.py
 │       ├── extraction/
 │       │   ├── __init__.py
+│       │   ├── events.py        # Phase 3: text -> structured events (rules)
 │       │   ├── html.py          # Phase 3: filing HTML -> plain text
 │       │   └── sections.py      # Phase 3: text -> Part / Item sections
 │       ├── ingestion/
@@ -132,10 +170,13 @@ Two details the extraction code has to fight, both of which the tests cover:
 │       │   └── store.py         # Phase 3: local SQLite filing index
 │       └── quant/
 │           ├── __init__.py
+│           ├── event_study.py   # events + forward returns -> statistics
 │           └── returns.py       # forward-return calculations
 ├── data/                        # local data (contents are git-ignored)
 ├── tests/
 │   ├── fixtures/                # saved EDGAR JSON + HTML responses (offline)
+│   ├── test_event_study.py
+│   ├── test_events.py
 │   ├── test_html.py
 │   ├── test_market.py
 │   ├── test_returns.py
@@ -286,22 +327,32 @@ the past and silently invalidate every later evaluation.
 
 ---
 
-## Next up (Phase 3 — event extraction)
+## Next up (Phase 3b — labelled golden set)
 
-Event extraction: turn the extracted sections into structured financial events
-(earnings beat/miss, guidance changes, acquisitions, management changes, ...).
-The order matters — a rule-based baseline and a hand-labelled golden set come
-first, so that adding Hugging Face models later has something to be measured
-against.
+The rule baseline exists; what it lacks is a measurement. Next is a
+hand-labelled set of 30–60 filing snippets (10–20 per event class) and a script
+that reports precision, recall and F1 per class for the baseline. Only then can
+a Hugging Face model be shown to be better rather than merely different.
 
 Using what exists today, from inside `backend/`:
 
 ```python
+from datetime import UTC, datetime
+
+from app.extraction.events import events_to_frame, extract_events
 from app.extraction.html import html_to_text
 from app.extraction.sections import find_item, parse_sections
+from app.ingestion.market import get_market_data
+from app.quant.event_study import attach_forward_returns, summarise_events
+from app.quant.returns import add_forward_returns
 
 text = html_to_text(open("path/to/filing.htm", encoding="utf-8").read())
 sections = parse_sections(text)
-mda = find_item(sections, "2", part="I")  # Item 2, Part I
-print(mda.heading, len(mda.text))
+
+mda = find_item(sections, "2", part="I")          # Item 2, Part I
+events = extract_events(sections, as_of=datetime(2026, 7, 26, 20, 4, tzinfo=UTC))
+frame = events_to_frame(events, ticker="NVDA")
+
+prices = add_forward_returns(get_market_data("NVDA", period="1y"))
+print(summarise_events(attach_forward_returns(frame, prices)))
 ```
