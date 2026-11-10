@@ -54,3 +54,10 @@ show_error_codes = true
 [[tool.mypy.overrides]]
 module = ["yfinance.*"]
 ignore_missing_imports = true
+
+# The optional ML extras (requirements-ml.txt) are not installed in CI, and
+# transformers ships no usable type information either way. They are imported
+# lazily, inside functions, so type checking stays meaningful.
+[[tool.mypy.overrides]]
+module = ["transformers.*", "torch.*"]
+ignore_missing_imports = true

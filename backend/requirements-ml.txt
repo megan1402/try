@@ -1,0 +1,25 @@
+# SignalForge — optional ML extras (Phase 3c).
+#
+# Deliberately NOT installed by `make setup` or CI: these are large downloads and
+# the test suite must stay offline and fast. Install them only to run the model
+# comparison:
+#
+#   pip install -r backend/requirements-ml.txt
+#
+# Pins are tighter than "latest" on purpose:
+#
+# * `transformers` 5.x requires torch >= 2.6. The wheel index available here tops
+#   out at torch 2.2.2, so transformers is held at 4.x.
+# * torch 2.2 was built against the numpy 1.x C ABI; with numpy 2 the model dies
+#   with `RuntimeError: Numpy is not available`. Hence `numpy<2`.
+#
+# With a newer torch (>= 2.6) both pins can be relaxed to `transformers>=5` and
+# numpy 2.
+#
+# Also note: models with a SentencePiece tokeniser (DeBERTa-v3, XLNet) need the
+# `sentencepiece` package, which has no wheel on every platform. The default
+# model below uses a RoBERTa tokeniser, so it installs everywhere.
+
+transformers>=4.40,<5
+torch>=2.2,<2.3
+numpy<2

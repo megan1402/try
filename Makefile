@@ -7,7 +7,7 @@ BIN    := $(VENV)/bin
 PY     := $(BIN)/python
 
 .DEFAULT_GOAL := help
-.PHONY: help setup test lint format typecheck check run run-sec index review score clean
+.PHONY: help setup test lint format typecheck check run run-sec index review score compare clean
 
 help: ## List available targets
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -48,6 +48,9 @@ review: ## Label golden-set snippets interactively
 
 score: ## Score the rule baseline against the labelled snippets
 	cd backend && ../$(PY) -m app.evaluation.report
+
+compare: ## Compare the rule baseline with the zero-shot model (needs requirements-ml)
+	cd backend && ../$(PY) -m app.models.compare
 
 clean: ## Remove caches and build artefacts
 	rm -rf .pytest_cache .mypy_cache .ruff_cache

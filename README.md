@@ -133,8 +133,8 @@ whose nearest earlier session is more than a week away, or that fall outside the
 price history, get no anchor and are reported as `NaN` rather than borrowing a
 stale close.
 
-Still to come: a labelled golden set (precision/recall/F1 per event class),
-Hugging Face models measured against this baseline, and embeddings + retrieval.
+Still to come: labels for the golden set, a measured comparison of the rules and
+the zero-shot model below, and then embeddings + retrieval.
 
 ### Measuring the baseline
 
@@ -154,6 +154,27 @@ Known gap in the pool: 10-Ks and 10-Qs contain almost no forward-guidance
 language, so `guidance_raise`, `guidance_cut`, `management_change` and
 `restructuring` currently have no examples. Those live in 8-K earnings releases
 (Exhibit 99.1), which the corpus does not download yet.
+
+### Zero-shot model (optional, needs no training)
+
+`app/models/zero_shot.py` turns a natural-language-inference model into an event
+classifier: each class is written as a sentence, and the best entailment score
+wins. It needs the optional extras and is skipped by CI:
+
+```bash
+pip install -r backend/requirements-ml.txt
+make compare          # rules vs model, side by side, on the 60 snippets
+```
+
+The first run agrees with the rules on **30/60** snippets. That is a disagreement
+map, not accuracy — the labels decide who is right. Two things it already shows:
+
+- the model almost never predicts `none` (7 of the 30 no-event snippets), so it
+  over-fires; the `none` hypothesis and its calibration need work before its
+  scores mean anything;
+- both predictors struggle with accounting boilerplate
+  ("property and equipment acquired", "identified for retirement"), which is the
+  kind of negative a golden set exists to catch.
 
 Two details the extraction code has to fight, both of which the tests cover:
 
@@ -177,6 +198,11 @@ Two details the extraction code has to fight, both of which the tests cover:
 │   ├── requirements-dev.txt     # dev tooling (pytest, ruff, mypy, stubs)
 │   └── app/
 │       ├── __init__.py
+│       ├── evaluation/
+│       │   ├── __init__.py
+│       │   ├── gold.py          # labelled snippet set and its file format
+│       │   ├── report.py        # precision / recall / F1 for a predictor
+│       │   └── review.py        # terminal tool for labelling snippets
 │       ├── extraction/
 │       │   ├── __init__.py
 │       │   ├── events.py        # Phase 3: text -> structured events (rules)
@@ -187,6 +213,10 @@ Two details the extraction code has to fight, both of which the tests cover:
 │       │   ├── market.py        # Phase 1: historical OHLCV data
 │       │   ├── sec.py           # Phase 2: SEC EDGAR filings
 │       │   └── store.py         # Phase 3: local SQLite filing index
+│       ├── models/
+│       │   ├── __init__.py
+│       │   ├── compare.py       # Phase 3c: rules vs zero-shot model
+│       │   └── zero_shot.py     # Phase 3c: NLI model as a classifier
 │       └── quant/
 │           ├── __init__.py
 │           ├── event_study.py   # events + forward returns -> statistics
@@ -309,6 +339,7 @@ make check      # lint -> format check -> typecheck -> tests
 | `make index` | Show the local filing index |
 | `make review` | Label golden-set snippets interactively |
 | `make score` | Score the rule baseline against the labelled snippets |
+| `make compare` | Rules vs zero-shot model (needs `requirements-ml.txt`) |
 | `make test` | Run the test suite |
 | `make lint` | `ruff check` + `ruff format --check` (no edits) |
 | `make format` | Auto-fix lint issues and reformat in place |
