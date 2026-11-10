@@ -7,7 +7,7 @@ BIN    := $(VENV)/bin
 PY     := $(BIN)/python
 
 .DEFAULT_GOAL := help
-.PHONY: help setup test lint format typecheck check run clean
+.PHONY: help setup test lint format typecheck check run run-sec index clean
 
 help: ## List available targets
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -39,6 +39,9 @@ run: ## Run the Phase 1 NVDA market-data example
 
 run-sec: ## Run the Phase 2 SEC EDGAR example
 	cd backend && ../$(PY) -m app.ingestion.sec
+
+index: ## Show the local filing index built by the SEC example
+	cd backend && ../$(PY) -m app.ingestion.store
 
 clean: ## Remove caches and build artefacts
 	rm -rf .pytest_cache .mypy_cache .ruff_cache

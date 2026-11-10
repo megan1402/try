@@ -4,7 +4,8 @@
 engineering (NLP, embeddings, retrieval, LLM reasoning, evaluation) with
 quantitative finance (market data, forward returns, historical analogues).
 
-> Status: **Phases 1–2 — Market data foundation + SEC EDGAR ingestion**.
+> Status: **Phases 1–2 complete; Phase 3 in progress — filing text and section
+> extraction**.
 
 ---
 
@@ -80,6 +81,36 @@ LLM APIs, vector databases, PostgreSQL, Docker, AWS and frontend frameworks.
 
 ---
 
+## What Phase 3 implements (in progress)
+
+Phase 3 turns filing documents into structured text. The first slice is done:
+
+- **Filing index** (`app/ingestion/store.py`) — every listed filing recorded in
+  a local SQLite database under `data/index/`, keyed by accession number, with
+  its `acceptance_datetime` and, once downloaded, the path of the local copy.
+  Re-running the SEC example updates rows instead of duplicating them.
+- **HTML to text** (`app/extraction/html.py`) — EDGAR's machine-generated XHTML
+  reduced to plain text with one line per block, entities decoded and scripts,
+  styles and non-breaking spaces removed.
+- **Section splitting** (`app/extraction/sections.py`) — text split into Parts
+  and Items (`part_ii_item_1a` is *Risk Factors*), with character offsets so a
+  later citation can point at the exact passage.
+
+Still to come in Phase 3: structured events (earnings beat/miss, guidance
+changes, acquisitions, ...) and a labelled golden set to evaluate them.
+
+Two details the extraction code has to fight, both of which the tests cover:
+
+- A **table of contents** looks exactly like a list of headings. It is removed
+  because its rows end in page numbers, sit before the first `Part` heading and
+  are followed by almost no text, while real sections are followed by
+  paragraphs.
+- **Cross-references** in prose mention items mid-sentence and must not open a
+  section. Requiring `Item N.` at the start of a line plus a title filters
+  almost all of them.
+
+---
+
 ## Project structure
 
 ```
@@ -90,19 +121,27 @@ LLM APIs, vector databases, PostgreSQL, Docker, AWS and frontend frameworks.
 │   ├── requirements-dev.txt     # dev tooling (pytest, ruff, mypy, stubs)
 │   └── app/
 │       ├── __init__.py
+│       ├── extraction/
+│       │   ├── __init__.py
+│       │   ├── html.py          # Phase 3: filing HTML -> plain text
+│       │   └── sections.py      # Phase 3: text -> Part / Item sections
 │       ├── ingestion/
 │       │   ├── __init__.py
 │       │   ├── market.py        # Phase 1: historical OHLCV data
-│       │   └── sec.py           # Phase 2: SEC EDGAR filings
+│       │   ├── sec.py           # Phase 2: SEC EDGAR filings
+│       │   └── store.py         # Phase 3: local SQLite filing index
 │       └── quant/
 │           ├── __init__.py
 │           └── returns.py       # forward-return calculations
 ├── data/                        # local data (contents are git-ignored)
 ├── tests/
-│   ├── fixtures/                # saved EDGAR JSON responses (offline tests)
+│   ├── fixtures/                # saved EDGAR JSON + HTML responses (offline)
+│   ├── test_html.py
 │   ├── test_market.py
 │   ├── test_returns.py
-│   └── test_sec.py
+│   ├── test_sections.py
+│   ├── test_sec.py
+│   └── test_store.py
 ├── conftest.py                  # puts backend/ on sys.path for pytest
 ├── pyproject.toml               # ruff / mypy / pytest configuration
 ├── Makefile                     # developer entry points
@@ -176,7 +215,8 @@ python -m app.ingestion.sec
 ```
 
 This resolves `NVDA` to its CIK, lists the recent 10-K / 10-Q filings, then
-downloads and saves the most recent one into `data/raw/sec/`.
+downloads and saves the most recent one into `data/raw/sec/`. Every listed
+filing is also recorded in `data/index/filings.db`; `make index` prints it.
 
 ---
 
@@ -205,7 +245,8 @@ make check      # lint -> format check -> typecheck -> tests
 |---|---|
 | `make setup` | Create `.venv` and install all dependencies |
 | `make run` | Run the Phase 1 market-data example |
-| `make run-sec` | Run the Phase 2 SEC EDGAR example |
+| `make run-sec` | Run the Phase 2 SEC EDGAR example (also fills the index) |
+| `make index` | Show the local filing index |
 | `make test` | Run the test suite |
 | `make lint` | `ruff check` + `ruff format --check` (no edits) |
 | `make format` | Auto-fix lint issues and reformat in place |
@@ -245,8 +286,22 @@ the past and silently invalidate every later evaluation.
 
 ---
 
-## Next up (Phase 3 — not started)
+## Next up (Phase 3 — event extraction)
 
-Event extraction: turn raw filing text into structured financial events
+Event extraction: turn the extracted sections into structured financial events
 (earnings beat/miss, guidance changes, acquisitions, management changes, ...).
-This is where Hugging Face models and evaluation first appear.
+The order matters — a rule-based baseline and a hand-labelled golden set come
+first, so that adding Hugging Face models later has something to be measured
+against.
+
+Using what exists today, from inside `backend/`:
+
+```python
+from app.extraction.html import html_to_text
+from app.extraction.sections import find_item, parse_sections
+
+text = html_to_text(open("path/to/filing.htm", encoding="utf-8").read())
+sections = parse_sections(text)
+mda = find_item(sections, "2", part="I")  # Item 2, Part I
+print(mda.heading, len(mda.text))
+```

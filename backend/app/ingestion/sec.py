@@ -295,12 +295,18 @@ def save_document(
 def main() -> None:
     """Manual smoke test: ``python -m app.ingestion.sec``.
 
-    Resolves NVDA to a CIK, lists recent 10-K/10-Q filings, then downloads and
-    saves the most recent one.
+    Resolves NVDA to a CIK, lists recent 10-K/10-Q filings, records them in the
+    local index, then downloads and saves the most recent one.
     """
     logging.basicConfig(
         level=logging.INFO, format="%(levelname)s %(name)s: %(message)s"
     )
+
+    # Imported here, not at module level, for the same reason the market example
+    # imports :mod:`app.quant` inside its ``main``: retrieval stays independent
+    # of everything built on top of it. It also breaks the import cycle, since
+    # the index module reuses :func:`normalize_cik` from this one.
+    from app.ingestion import store
 
     ticker = "NVDA"
 
@@ -317,26 +323,37 @@ def main() -> None:
     columns = ["form", "filing_date", "report_date", "acceptance_datetime"]
     print(filings[columns].head(5).to_string(index=False))
 
-    if filings.empty:
-        print("\nNothing to download.")
-        return
-
-    latest = filings.iloc[0]
-    print(f"\nDownloading the {latest['form']} filed {latest['filing_date']} ...")
-
+    connection = store.connect()
     try:
-        text = download_document(str(latest["url"]))
-        path = save_document(
-            text,
-            cik,
-            str(latest["accession_number"]),
-            str(latest["primary_document"]),
+        store.upsert_filings(connection, cik, filings)
+        print(
+            f"\nIndexed {len(filings)} filing(s) in "
+            f"{store.display_path(store.DEFAULT_INDEX_PATH)}"
         )
-    except (ValueError, SecDataError) as exc:
-        logger.error("%s", exc)
-        raise SystemExit(1) from exc
 
-    print(f"Saved {len(text):,} characters to {path.relative_to(PROJECT_ROOT)}")
+        if filings.empty:
+            print("\nNothing to download.")
+            return
+
+        latest = filings.iloc[0]
+        print(f"\nDownloading the {latest['form']} filed {latest['filing_date']} ...")
+
+        try:
+            text = download_document(str(latest["url"]))
+            path = save_document(
+                text,
+                cik,
+                str(latest["accession_number"]),
+                str(latest["primary_document"]),
+            )
+            store.mark_saved(connection, str(latest["accession_number"]), path)
+        except (ValueError, SecDataError) as exc:
+            logger.error("%s", exc)
+            raise SystemExit(1) from exc
+
+        print(f"Saved {len(text):,} characters to {path.relative_to(PROJECT_ROOT)}")
+    finally:
+        connection.close()
 
 
 if __name__ == "__main__":

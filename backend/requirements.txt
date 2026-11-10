@@ -8,3 +8,5 @@
 pandas>=2.0        # Phase 1 — price data and tabular results
 yfinance>=0.2.40   # Phase 1 — daily OHLCV prototype
 requests>=2.31     # Phase 2 — SEC EDGAR HTTP calls
+beautifulsoup4>=4.12  # Phase 3 — filing HTML -> text
+lxml>=5.0             # Phase 3 — tolerant parser for machine-generated XHTML
