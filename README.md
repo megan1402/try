@@ -349,7 +349,7 @@ from app.quant.returns import add_forward_returns
 text = html_to_text(open("path/to/filing.htm", encoding="utf-8").read())
 sections = parse_sections(text)
 
-mda = find_item(sections, "2", part="I")          # Item 2, Part I
+mda = find_item(sections, "2", part="I")  # Item 2, Part I
 events = extract_events(sections, as_of=datetime(2026, 7, 26, 20, 4, tzinfo=UTC))
 frame = events_to_frame(events, ticker="NVDA")
 
