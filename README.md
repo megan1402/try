@@ -136,6 +136,25 @@ stale close.
 Still to come: a labelled golden set (precision/recall/F1 per event class),
 Hugging Face models measured against this baseline, and embeddings + retrieval.
 
+### Measuring the baseline
+
+`tests/fixtures/events_gold.jsonl` holds 60 real snippets, one JSON object per
+line, each with an empty `label` and a machine `proposed` guess. Label them with
+`make review` — one keystroke per snippet, saved after every answer — then
+`make score` prints precision / recall / F1 per class plus every disagreement.
+
+`proposed` is never used for scoring. If it were, the rules would be graded
+against themselves and the numbers would be meaningless. The value of the set is
+precisely where a human disagrees with the rules: on the current pool the
+baseline already proposes `acquisition` for *"property, equipment and intangible
+assets acquired but not paid for"* and `divestiture` for *"identified for
+retirement or disposition"*.
+
+Known gap in the pool: 10-Ks and 10-Qs contain almost no forward-guidance
+language, so `guidance_raise`, `guidance_cut`, `management_change` and
+`restructuring` currently have no examples. Those live in 8-K earnings releases
+(Exhibit 99.1), which the corpus does not download yet.
+
 Two details the extraction code has to fight, both of which the tests cover:
 
 - A **table of contents** looks exactly like a list of headings. It is removed
@@ -288,6 +307,8 @@ make check      # lint -> format check -> typecheck -> tests
 | `make run` | Run the Phase 1 market-data example |
 | `make run-sec` | Run the Phase 2 SEC EDGAR example (also fills the index) |
 | `make index` | Show the local filing index |
+| `make review` | Label golden-set snippets interactively |
+| `make score` | Score the rule baseline against the labelled snippets |
 | `make test` | Run the test suite |
 | `make lint` | `ruff check` + `ruff format --check` (no edits) |
 | `make format` | Auto-fix lint issues and reformat in place |
@@ -327,12 +348,14 @@ the past and silently invalidate every later evaluation.
 
 ---
 
-## Next up (Phase 3b — labelled golden set)
+## Next up (Phase 3b — label, then measure)
 
-The rule baseline exists; what it lacks is a measurement. Next is a
-hand-labelled set of 30–60 filing snippets (10–20 per event class) and a script
-that reports precision, recall and F1 per class for the baseline. Only then can
-a Hugging Face model be shown to be better rather than merely different.
+The harness is in place; the snippets are not labelled yet. Run `make review`,
+work through the 60 snippets, then `make score` for the baseline's first
+precision and recall numbers. After that, add 8-K earnings releases to the
+corpus so the guidance classes have examples — and only then start on a Hugging
+Face model, so that "the model is better" is a measurement rather than an
+impression.
 
 Using what exists today, from inside `backend/`:
 

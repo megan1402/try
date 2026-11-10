@@ -7,7 +7,7 @@ BIN    := $(VENV)/bin
 PY     := $(BIN)/python
 
 .DEFAULT_GOAL := help
-.PHONY: help setup test lint format typecheck check run run-sec index clean
+.PHONY: help setup test lint format typecheck check run run-sec index review score clean
 
 help: ## List available targets
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -42,6 +42,12 @@ run-sec: ## Run the Phase 2 SEC EDGAR example
 
 index: ## Show the local filing index built by the SEC example
 	cd backend && ../$(PY) -m app.ingestion.store
+
+review: ## Label golden-set snippets interactively
+	cd backend && ../$(PY) -m app.evaluation.review
+
+score: ## Score the rule baseline against the labelled snippets
+	cd backend && ../$(PY) -m app.evaluation.report
 
 clean: ## Remove caches and build artefacts
 	rm -rf .pytest_cache .mypy_cache .ruff_cache
