@@ -40,6 +40,11 @@ def test_shortcuts_map_to_none_and_skip():
     assert resolve_answer("s", None) == SKIP_LABEL
 
 
+@pytest.mark.parametrize("answer", ["b", "B", " back "])
+def test_b_means_back(answer: str):
+    assert resolve_answer(answer, None) == "back"
+
+
 @pytest.mark.parametrize("answer", ["q", "Q", " q "])
 def test_q_quits(answer: str):
     assert resolve_answer(answer, None) == "quit"

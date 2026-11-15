@@ -133,16 +133,19 @@ def is_scored(snippet: GoldSnippet) -> bool:
 def with_label(
     snippets: Sequence[GoldSnippet],
     snippet_id: str,
-    label: str,
+    label: str | None,
 ) -> list[GoldSnippet]:
     """Return ``snippets`` with ``snippet_id`` relabelled.
+
+    ``label=None`` clears the label, which is how the review tool implements
+    *undo*: the snippet becomes unlabelled and is shown again.
 
     Raises
     ------
     ValueError
         If ``label`` is unknown or ``snippet_id`` is not in ``snippets``.
     """
-    if label not in LABELS:
+    if label is not None and label not in LABELS:
         raise ValueError(f"Unknown label {label!r}; expected one of {LABELS}.")
     if not any(snippet.id == snippet_id for snippet in snippets):
         raise ValueError(f"No snippet with id {snippet_id!r}.")

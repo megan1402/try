@@ -134,6 +134,15 @@ def test_with_label_rejects_unknown_label_or_id():
         gold.with_label([make_snippet()], "zzz", "none")
 
 
+def test_with_label_none_clears_the_label():
+    snippets = [make_snippet("a#1", "acquisition"), make_snippet("a#2", "none")]
+
+    cleared = gold.with_label(snippets, "a#1", None)
+
+    assert [s.label for s in cleared] == [None, "none"]
+    assert [s.id for s in gold.unlabelled(cleared)] == ["a#1"]
+
+
 # --- The file we actually ship ---------------------------------------------
 
 

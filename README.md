@@ -139,9 +139,11 @@ the zero-shot model below, and then embeddings + retrieval.
 ### Measuring the baseline
 
 `tests/fixtures/events_gold.jsonl` holds 60 real snippets, one JSON object per
-line, each with an empty `label` and a machine `proposed` guess. Label them with
-`make review` — one keystroke per snippet, saved after every answer — then
-`make score` prints precision / recall / F1 per class plus every disagreement.
+line, each with a `label` and a machine `proposed` guess. Labels start empty and
+accumulate as you work through them. Label them with `make review` — one
+keystroke per snippet, saved after every answer, with `b` to undo the last one —
+then `make score` prints precision / recall / F1 per class plus every
+disagreement.
 
 `proposed` is never used for scoring. If it were, the rules would be graded
 against themselves and the numbers would be meaningless. The value of the set is

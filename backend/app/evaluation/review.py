@@ -13,6 +13,7 @@ is excluded from the numbers instead of being scored as a mistake.
 from __future__ import annotations
 
 import sys
+from collections.abc import Sequence
 from pathlib import Path
 
 from app.evaluation.gold import (
@@ -27,9 +28,12 @@ from app.evaluation.gold import (
     with_label,
 )
 
-#: What a keystroke means. ``""`` accepts the proposal, ``q`` saves and leaves.
+#: What a keystroke means. ``""`` accepts the proposal, ``b`` undoes the last
+#: label, ``q`` saves and leaves.
 _ALIASES: dict[str, str] = {
     "": "",
+    "b": "back",
+    "back": "back",
     "n": NONE_LABEL,
     "s": SKIP_LABEL,
     "q": "quit",
@@ -39,9 +43,10 @@ _ALIASES: dict[str, str] = {
 def resolve_answer(answer: str, proposed: str | None) -> str | None:
     """Turn one keystroke into a label, or ``None`` when it is not valid.
 
-    ``""`` means *accept the proposal*; ``"q"`` returns ``"quit"``; a digit
-    ``1``–``9`` selects :data:`app.evaluation.gold.LABELS`; ``n``/``s`` select
-    ``none``/``skip``; any full label name is accepted too.
+    ``""`` means *accept the proposal*; ``"b"`` goes back one snippet; ``"q"``
+    returns ``"quit"``; a digit ``1``–``11`` selects
+    :data:`app.evaluation.gold.LABELS`; ``n``/``s`` select ``none``/``skip``;
+    any full label name is accepted too.
     """
     text = answer.strip().lower()
 
@@ -71,40 +76,76 @@ def main() -> None:
     _print_keys()
     print(f"{len(pending)} snippet(s) to label in {path.name}\n")
 
-    for position, snippet in enumerate(pending, start=1):
-        _print_snippet(snippet, position, len(pending))
+    queue = [snippet.id for snippet in pending]
+    labelled_this_session: list[str] = []
+    position = 0
 
-        while True:
-            try:
-                answer = input("label> ")
-            except (EOFError, KeyboardInterrupt):
-                save_gold(snippets, path)
-                print(f"\nSaved {path.name}.")
-                return
+    while position < len(queue):
+        snippet = _find(snippets, queue[position])
+        _print_snippet(snippet, position + 1, len(queue))
 
-            label = resolve_answer(answer, snippet.proposed)
-            if label is None:
-                print("? press 1-9, n, s, enter (accept proposal) or q to quit")
+        answer = _ask(snippet)
+        if answer is None or answer == "quit":
+            save_gold(snippets, path)
+            print(f"\nSaved {path.name}.")
+            return
+
+        if answer == "back":
+            if not labelled_this_session:
+                print("Already at the first snippet of this session — nothing to undo.")
                 continue
-            if label == "quit":
-                save_gold(snippets, path)
-                print(f"Saved {path.name}.")
-                return
-            break
+            previous = labelled_this_session.pop()
+            snippets = with_label(snippets, previous, None)
+            save_gold(snippets, path)
+            position -= 1
+            print(f"Cleared the label for {previous}; showing it again.")
+            continue
 
-        snippets = with_label(snippets, snippet.id, label)
+        snippets = with_label(snippets, snippet.id, answer)
+        labelled_this_session.append(snippet.id)
         save_gold(snippets, path)
+        position += 1
 
     save_gold(snippets, path)
     done = sum(1 for snippet in snippets if snippet.label is not None)
     print(f"\nDone: {done}/{len(snippets)} snippet(s) labelled. Next: `make score`.")
 
 
+def _ask(snippet: GoldSnippet) -> str | None:
+    """Prompt until the keystroke is understood.
+
+    Returns a label, ``"back"`` or ``"quit"``; ``None`` means end of input or
+    Ctrl-C, which the caller treats as *save and leave*.
+    """
+    while True:
+        try:
+            answer = input("label> ")
+        except (EOFError, KeyboardInterrupt):
+            return None
+
+        label = resolve_answer(answer, snippet.proposed)
+        if label is not None:
+            return label
+
+        print("? press 1-11, n, s, b (back), enter (accept proposal) or q to quit")
+
+
+def _find(snippets: Sequence[GoldSnippet], snippet_id: str) -> GoldSnippet:
+    """Return the snippet with ``snippet_id``, with its current label state."""
+    for snippet in snippets:
+        if snippet.id == snippet_id:
+            return snippet
+    raise KeyError(f"No snippet with id {snippet_id!r}.")
+
+
 def _print_keys() -> None:
     print("Keys:")
     for index, label in enumerate(LABELS, start=1):
         print(f"  {index}. {label}")
-    print("  n = none   s = skip   enter = accept proposal   q = save and quit\n")
+    print(
+        "  n = none   s = skip   enter = accept proposal\n"
+        "  b = back (undo the last label)   q = save and quit\n"
+    )
 
 
 def _print_snippet(snippet: GoldSnippet, position: int, total: int) -> None:
