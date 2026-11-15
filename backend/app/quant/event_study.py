@@ -37,6 +37,7 @@ the statistics instead of pretending they are zero.
 from __future__ import annotations
 
 import math
+import sqlite3
 from pathlib import Path
 from typing import Final
 
@@ -240,37 +241,30 @@ def _summarise_values(
     }
 
 
-def main() -> None:
-    """Manual entry point: run the study over everything in the local index.
+def events_from_index(
+    conn: sqlite3.Connection,
+    *,
+    cik: str | int,
+    ticker: str,
+) -> tuple[pd.DataFrame, int]:
+    """Extract events from every locally stored filing for ``cik``.
 
-    ``python -m app.quant.event_study --ticker NVDA --cik 1045810``
+    Returns the events frame and the number of filings actually read. Filings
+    that are indexed but not downloaded are skipped, as are files that have
+    since been deleted.
 
-    Imports are local so the pure functions above stay usable without the
-    ingestion layer or yfinance.
+    Extraction imports live inside the function so the pure helpers above stay
+    usable without the document pipeline.
     """
-    import argparse
-
     from app.extraction.events import events_to_frame, extract_events
     from app.extraction.html import html_to_text
     from app.extraction.sections import parse_sections
     from app.ingestion import store
-    from app.ingestion.market import get_market_data
-    from app.quant.returns import add_forward_returns
 
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--ticker", required=True, help="e.g. NVDA")
-    parser.add_argument("--cik", required=True, help="e.g. 1045810")
-    parser.add_argument("--period", default="2y", help="price history window")
-    args = parser.parse_args()
-
-    connection = store.connect()
-    try:
-        filings = store.get_filings(connection, cik=args.cik)
-    finally:
-        connection.close()
-
-    frames = []
+    filings = store.get_filings(conn, cik=cik)
+    frames: list[pd.DataFrame] = []
     used = 0
+
     for row in filings.itertuples(index=False):
         if not isinstance(row.local_path, str) or not row.local_path:
             continue
@@ -284,45 +278,76 @@ def main() -> None:
         as_of = pd.Timestamp(str(row.acceptance_datetime)).to_pydatetime()
         events = extract_events(sections, as_of=as_of)
         used += 1
-
-        print(
-            f"  {row.form} {row.filing_date}: {len(sections)} sections, "
-            f"{len(events)} event(s)"
-        )
         frames.append(
             events_to_frame(
                 events,
-                ticker=args.ticker,
+                ticker=ticker,
                 accession_number=str(row.accession_number),
             )
         )
 
     if not frames:
-        print("No local filings in the index; run `make run-sec` first.")
-        return
+        return pd.DataFrame(), 0
+    return pd.concat(frames, ignore_index=True), used
 
-    events_frame = pd.concat(frames, ignore_index=True)
+
+def main() -> None:
+    """Manual entry point: run the study for one issuer in the local index.
+
+    ``python -m app.quant.event_study --ticker NVDA --cik 1045810``
+
+    For every issuer at once, use :mod:`app.quant.corpus_study`.
+    """
+    import argparse
+
+    from app.ingestion import store
+    from app.ingestion.market import get_market_data
+    from app.quant.returns import add_forward_returns
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--ticker", required=True, help="e.g. NVDA")
+    parser.add_argument("--cik", required=True, help="e.g. 1045810")
+    parser.add_argument("--period", default="2y", help="price history window")
+    args = parser.parse_args()
+
+    connection = store.connect()
+    try:
+        events_frame, used = events_from_index(
+            connection, cik=args.cik, ticker=args.ticker
+        )
+    finally:
+        connection.close()
+
     if events_frame.empty:
-        print(f"\nNo events detected across {used} filing(s).")
+        print(f"No events across {used} local filing(s); run `make collect` first.")
         return
 
     prices = add_forward_returns(get_market_data(args.ticker, period=args.period))
     joined = attach_forward_returns(events_frame, prices)
 
-    print(f"\n{used} filing(s) -> {len(events_frame)} event(s)")
+    print(f"{used} filing(s) -> {len(events_frame)} event(s)")
     print(summarise_events(joined).to_string(index=False, float_format="%.3f"))
 
-    usable = joined.dropna(subset=["event_date"])
-    distinct_dates = usable["event_date"].nunique()
+    distinct_dates, usable_events = independence_counts(joined)
     print(
         f"\nIndependent observations: {distinct_dates} distinct event date(s) "
-        f"across {len(usable)} event(s)."
+        f"across {usable_events} event(s)."
     )
     print(
         "Events from the same filing share one anchor close, so they are NOT "
         "independent trials. Treat these numbers as a pipeline check, not "
         "evidence."
     )
+
+
+def independence_counts(joined: pd.DataFrame) -> tuple[int, int]:
+    """Return ``(distinct anchor dates, events with an anchor)``.
+
+    Events from one filing share an anchor close, so the first number — not the
+    second — is the effective sample size.
+    """
+    usable = joined.dropna(subset=["event_date"])
+    return int(usable["event_date"].nunique()), len(usable)
 
 
 if __name__ == "__main__":

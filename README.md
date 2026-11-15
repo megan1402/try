@@ -358,6 +358,7 @@ make check      # lint -> format check -> typecheck -> tests
 | `make score` | Score the rule baseline against the labelled snippets |
 | `make compare` | Rules vs zero-shot model (needs `requirements-ml.txt`) |
 | `make study` | Event study over the local filings (real prices, few filings) |
+| `make study-all` | Cross-issuer event study over every issuer in the index |
 | `make collect` | Bulk-download filings: `make collect TICKERS="NVDA MSFT"` |
 | `make test` | Run the test suite |
 | `make lint` | `ruff check` + `ruff format --check` (no edits) |

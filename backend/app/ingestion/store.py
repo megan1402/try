@@ -77,6 +77,17 @@ CREATE TABLE IF NOT EXISTS filings (
 
 CREATE INDEX IF NOT EXISTS ix_filings_cik_filing_date
     ON filings (cik, filing_date DESC);
+
+-- One row per ticker: an issuer can have several share classes, so a CIK may
+-- appear more than once. Kept separate from `filings` so re-listing a company
+-- never has to repeat it.
+CREATE TABLE IF NOT EXISTS companies (
+    ticker     TEXT PRIMARY KEY,
+    cik        TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS ix_companies_cik ON companies (cik);
 """
 
 _UPSERT = """
@@ -95,6 +106,17 @@ ON CONFLICT (accession_number) DO UPDATE SET
     url                 = excluded.url,
     ingested_at         = excluded.ingested_at
 """
+
+_COMPANY_UPSERT = """
+INSERT INTO companies (ticker, cik, updated_at)
+VALUES (?, ?, ?)
+ON CONFLICT (ticker) DO UPDATE SET
+    cik        = excluded.cik,
+    updated_at = excluded.updated_at
+"""
+
+#: Columns of :func:`get_companies`.
+COMPANY_COLUMNS: tuple[str, ...] = ("ticker", "cik", "updated_at")
 
 
 def display_path(path: Path) -> str:
@@ -154,6 +176,41 @@ def upsert_filings(
     with conn:
         conn.executemany(_UPSERT, rows)
     return len(rows)
+
+
+def upsert_company(conn: sqlite3.Connection, ticker: str, cik: str | int) -> None:
+    """Remember which ticker a CIK belongs to.
+
+    Without this the index knows only CIKs, and a later study run would have to
+    ask EDGAR for the ticker map again — network access for something already
+    known at collection time.
+
+    Raises
+    ------
+    ValueError
+        If ``ticker`` is blank or ``cik`` is not numeric.
+    """
+    symbol = ticker.strip().upper()
+    if not symbol:
+        raise ValueError("ticker must be a non-empty string.")
+
+    with conn:
+        conn.execute(
+            _COMPANY_UPSERT,
+            (
+                symbol,
+                normalize_cik(cik),
+                datetime.now(UTC).isoformat(timespec="seconds"),
+            ),
+        )
+
+
+def get_companies(conn: sqlite3.Connection) -> pd.DataFrame:
+    """Return the ticker -> CIK mapping, alphabetically by ticker."""
+    rows = conn.execute(
+        "SELECT ticker, cik, updated_at FROM companies ORDER BY ticker"
+    ).fetchall()
+    return pd.DataFrame([tuple(row) for row in rows], columns=list(COMPANY_COLUMNS))
 
 
 def mark_saved(

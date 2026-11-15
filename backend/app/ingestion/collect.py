@@ -136,6 +136,7 @@ def collect_company(
     cik_fn = resolve_cik or get_cik
 
     cik = cik_fn(ticker)
+    store.upsert_company(conn, ticker, cik)
 
     sleep()
     listed = listing_fn(cik, forms)
