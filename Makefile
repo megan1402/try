@@ -7,7 +7,7 @@ BIN    := $(VENV)/bin
 PY     := $(BIN)/python
 
 .DEFAULT_GOAL := help
-.PHONY: help setup test lint format typecheck check run run-sec index review unlabel score compare study clean
+.PHONY: help setup test lint format typecheck check run run-sec index review unlabel score compare study collect clean
 
 help: ## List available targets
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -58,6 +58,10 @@ compare: ## Compare the rule baseline with the zero-shot model (needs requiremen
 
 study: ## Event study over the local filings (TICKER=NVDA CIK=1045810)
 	cd backend && ../$(PY) -m app.quant.event_study --ticker $(or $(TICKER),NVDA) --cik $(or $(CIK),1045810)
+
+collect: ## Download filings: make collect TICKERS="NVDA MSFT" [LIMIT=5]
+	@test -n "$(TICKERS)" || { echo 'usage: make collect TICKERS="NVDA MSFT" [LIMIT=5]'; exit 1; }
+	cd backend && ../$(PY) -m app.ingestion.collect $(TICKERS) $(if $(LIMIT),--limit $(LIMIT),)
 
 clean: ## Remove caches and build artefacts
 	rm -rf .pytest_cache .mypy_cache .ruff_cache

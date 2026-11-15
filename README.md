@@ -315,6 +315,16 @@ This resolves `NVDA` to its CIK, lists the recent 10-K / 10-Q filings, then
 downloads and saves the most recent one into `data/raw/sec/`. Every listed
 filing is also recorded in `data/index/filings.db`; `make index` prints it.
 
+For more than one filing, use the collector, which is resumable and stays inside
+EDGAR's rate limit:
+
+```bash
+make collect TICKERS="NVDA MSFT AAPL" LIMIT=8   # newest 8 per company
+```
+
+Documents already on disk are skipped, so an interrupted run resumes where it
+stopped and nothing is downloaded twice.
+
 ---
 
 ## Run the tests
@@ -348,6 +358,7 @@ make check      # lint -> format check -> typecheck -> tests
 | `make score` | Score the rule baseline against the labelled snippets |
 | `make compare` | Rules vs zero-shot model (needs `requirements-ml.txt`) |
 | `make study` | Event study over the local filings (real prices, few filings) |
+| `make collect` | Bulk-download filings: `make collect TICKERS="NVDA MSFT"` |
 | `make test` | Run the test suite |
 | `make lint` | `ruff check` + `ruff format --check` (no edits) |
 | `make format` | Auto-fix lint issues and reformat in place |

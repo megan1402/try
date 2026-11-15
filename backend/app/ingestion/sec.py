@@ -268,6 +268,30 @@ def download_document(url: str) -> str:
     return response.text
 
 
+def document_path(
+    cik: str | int,
+    accession_number: str,
+    document: str,
+    root: Path = DEFAULT_RAW_DIR,
+) -> Path:
+    """Return where :func:`save_document` would write this filing.
+
+    Exposed so callers can check whether a document is already on disk *before*
+    spending a request on it. The filename is reduced to its final component, so
+    a hostile ``document`` value cannot escape ``root``.
+    """
+    safe_name = Path(document).name
+    if not safe_name:
+        raise ValueError("document must contain a filename.")
+
+    return (
+        root
+        / str(int(normalize_cik(cik)))
+        / accession_number.replace("-", "")
+        / safe_name
+    )
+
+
 def save_document(
     text: str,
     cik: str | int,
@@ -280,14 +304,8 @@ def save_document(
     Returns the path that was written. The filename is reduced to its final
     component, so a hostile ``document`` value cannot escape ``root``.
     """
-    safe_name = Path(document).name
-    if not safe_name:
-        raise ValueError("document must contain a filename.")
-
-    directory = root / str(int(normalize_cik(cik))) / accession_number.replace("-", "")
-    directory.mkdir(parents=True, exist_ok=True)
-
-    path = directory / safe_name
+    path = document_path(cik, accession_number, document, root)
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")
     return path
 
