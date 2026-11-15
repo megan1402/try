@@ -7,7 +7,7 @@ BIN    := $(VENV)/bin
 PY     := $(BIN)/python
 
 .DEFAULT_GOAL := help
-.PHONY: help setup test lint format typecheck check run run-sec index review unlabel score compare clean
+.PHONY: help setup test lint format typecheck check run run-sec index review unlabel score compare study clean
 
 help: ## List available targets
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -55,6 +55,9 @@ score: ## Score the rule baseline against the labelled snippets
 
 compare: ## Compare the rule baseline with the zero-shot model (needs requirements-ml)
 	cd backend && ../$(PY) -m app.models.compare
+
+study: ## Event study over the local filings (TICKER=NVDA CIK=1045810)
+	cd backend && ../$(PY) -m app.quant.event_study --ticker $(or $(TICKER),NVDA) --cik $(or $(CIK),1045810)
 
 clean: ## Remove caches and build artefacts
 	rm -rf .pytest_cache .mypy_cache .ruff_cache

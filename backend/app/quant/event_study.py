@@ -37,6 +37,7 @@ the statistics instead of pretending they are zero.
 from __future__ import annotations
 
 import math
+from pathlib import Path
 from typing import Final
 
 import numpy as np
@@ -237,3 +238,92 @@ def _summarise_values(
         "hit_rate": float((values > 0).mean()),
         "t_stat": t_stat,
     }
+
+
+def main() -> None:
+    """Manual entry point: run the study over everything in the local index.
+
+    ``python -m app.quant.event_study --ticker NVDA --cik 1045810``
+
+    Imports are local so the pure functions above stay usable without the
+    ingestion layer or yfinance.
+    """
+    import argparse
+
+    from app.extraction.events import events_to_frame, extract_events
+    from app.extraction.html import html_to_text
+    from app.extraction.sections import parse_sections
+    from app.ingestion import store
+    from app.ingestion.market import get_market_data
+    from app.quant.returns import add_forward_returns
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--ticker", required=True, help="e.g. NVDA")
+    parser.add_argument("--cik", required=True, help="e.g. 1045810")
+    parser.add_argument("--period", default="2y", help="price history window")
+    args = parser.parse_args()
+
+    connection = store.connect()
+    try:
+        filings = store.get_filings(connection, cik=args.cik)
+    finally:
+        connection.close()
+
+    frames = []
+    used = 0
+    for row in filings.itertuples(index=False):
+        if not isinstance(row.local_path, str) or not row.local_path:
+            continue
+        path = Path(row.local_path)
+        if not path.is_absolute():
+            path = store.PROJECT_ROOT / path
+        if not path.exists():
+            continue
+
+        sections = parse_sections(html_to_text(path.read_text(encoding="utf-8")))
+        as_of = pd.Timestamp(str(row.acceptance_datetime)).to_pydatetime()
+        events = extract_events(sections, as_of=as_of)
+        used += 1
+
+        print(
+            f"  {row.form} {row.filing_date}: {len(sections)} sections, "
+            f"{len(events)} event(s)"
+        )
+        frames.append(
+            events_to_frame(
+                events,
+                ticker=args.ticker,
+                accession_number=str(row.accession_number),
+            )
+        )
+
+    if not frames:
+        print("No local filings in the index; run `make run-sec` first.")
+        return
+
+    events_frame = pd.concat(frames, ignore_index=True)
+    if events_frame.empty:
+        print(f"\nNo events detected across {used} filing(s).")
+        return
+
+    prices = add_forward_returns(get_market_data(args.ticker, period=args.period))
+    joined = attach_forward_returns(events_frame, prices)
+
+    print(f"\n{used} filing(s) -> {len(events_frame)} event(s)")
+    print(summarise_events(joined).to_string(index=False, float_format="%.3f"))
+
+    usable = joined.dropna(subset=["event_date"])
+    distinct_dates = usable["event_date"].nunique()
+    print(
+        f"\nIndependent observations: {distinct_dates} distinct event date(s) "
+        f"across {len(usable)} event(s)."
+    )
+    print(
+        "Events from the same filing share one anchor close, so they are NOT "
+        "independent trials. Treat these numbers as a pipeline check, not "
+        "evidence."
+    )
+
+
+if __name__ == "__main__":
+    main()

@@ -146,7 +146,12 @@ then `make score` prints precision / recall / F1 per class plus every
 disagreement.
 
 `proposed` is never used for scoring. If it were, the rules would be graded
-against themselves and the numbers would be meaningless. The value of the set is
+against themselves and the numbers would be meaningless.
+
+> **Status: the set is frozen as a debugging set.** 24 of 60 snippets are
+> labelled, and the pool was mined by rule vocabulary from one issuer — so its
+> numbers diagnose the rules but do not estimate performance. See
+> [`docs/eval-notes.md`](docs/eval-notes.md) for what may and may not be claimed. The value of the set is
 precisely where a human disagrees with the rules: on the current pool the
 baseline already proposes `acquisition` for *"property, equipment and intangible
 assets acquired but not paid for"* and `divestiture` for *"identified for
@@ -342,6 +347,7 @@ make check      # lint -> format check -> typecheck -> tests
 | `make review` | Label golden-set snippets interactively |
 | `make score` | Score the rule baseline against the labelled snippets |
 | `make compare` | Rules vs zero-shot model (needs `requirements-ml.txt`) |
+| `make study` | Event study over the local filings (real prices, few filings) |
 | `make test` | Run the test suite |
 | `make lint` | `ruff check` + `ruff format --check` (no edits) |
 | `make format` | Auto-fix lint issues and reformat in place |
