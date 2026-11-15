@@ -5,6 +5,18 @@ Written 2026-11-16. This file exists so that the numbers produced by
 the 24 labelled snippets support, what they do not, and why the set was frozen
 rather than extended.
 
+## Decision (2026-11-16)
+
+**Freeze this set and stop labelling. Improve evaluation later.** The pool is
+too biased to serve as a benchmark, and extending it as constructed would deepen
+the bias rather than fix it. Development moves on to return-based evidence
+(`make study`), which needs no labels: it needs *filings*, not annotations.
+
+Evaluation is revisited only when it can be built properly — rule-blind
+sampling, per-class balance, 8-K earnings releases, several issuers, and blind
+labelling with an inter-annotator check. The construction notes below are the
+specification for that work.
+
 ## What was measured
 
 24 of 60 snippets were labelled by hand: **13 `none`, 7
