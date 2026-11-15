@@ -7,7 +7,7 @@ BIN    := $(VENV)/bin
 PY     := $(BIN)/python
 
 .DEFAULT_GOAL := help
-.PHONY: help setup test lint format typecheck check run run-sec index review score compare clean
+.PHONY: help setup test lint format typecheck check run run-sec index review unlabel score compare clean
 
 help: ## List available targets
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -45,6 +45,10 @@ index: ## Show the local filing index built by the SEC example
 
 review: ## Label golden-set snippets interactively
 	cd backend && ../$(PY) -m app.evaluation.review
+
+unlabel: ## Clear one label: make unlabel ID=k007
+	@test -n "$(ID)" || { echo "usage: make unlabel ID=k007"; exit 1; }
+	cd backend && ../$(PY) -m app.evaluation.review --clear $(ID)
 
 score: ## Score the rule baseline against the labelled snippets
 	cd backend && ../$(PY) -m app.evaluation.report

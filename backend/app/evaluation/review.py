@@ -12,7 +12,7 @@ is excluded from the numbers instead of being scored as a mistake.
 
 from __future__ import annotations
 
-import sys
+import argparse
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -62,19 +62,41 @@ def resolve_answer(answer: str, proposed: str | None) -> str | None:
 
 
 def main() -> None:
-    """Manual entry point: ``python -m app.evaluation.review [path]``."""
-    path = Path(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT_GOLD_PATH
-    snippets = load_gold(path)
+    """Manual entry point: ``python -m app.evaluation.review [path] [--clear ID]``."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "path",
+        nargs="?",
+        type=Path,
+        default=DEFAULT_GOLD_PATH,
+        help="golden-set file (default: tests/fixtures/events_gold.jsonl)",
+    )
+    parser.add_argument(
+        "--clear",
+        metavar="ID",
+        help="clear one snippet's label and exit, e.g. --clear k007",
+    )
+    args = parser.parse_args()
+
+    snippets = load_gold(args.path)
+
+    if args.clear:
+        snippets = with_label(snippets, args.clear, None)
+        save_gold(snippets, args.path)
+        print(f"Cleared the label for {args.clear}; `make review` will show it again.")
+        return
+
     pending = unlabelled(snippets)
 
     if not pending:
         print(
-            f"Nothing to label: all {len(snippets)} snippet(s) in {path.name} are done."
+            f"Nothing to label: all {len(snippets)} snippet(s) in "
+            f"{args.path.name} are done."
         )
         return
 
     _print_keys()
-    print(f"{len(pending)} snippet(s) to label in {path.name}\n")
+    print(f"{len(pending)} snippet(s) to label in {args.path.name}\n")
 
     queue = [snippet.id for snippet in pending]
     labelled_this_session: list[str] = []
@@ -86,8 +108,8 @@ def main() -> None:
 
         answer = _ask(snippet)
         if answer is None or answer == "quit":
-            save_gold(snippets, path)
-            print(f"\nSaved {path.name}.")
+            save_gold(snippets, args.path)
+            print(f"\nSaved {args.path.name}.")
             return
 
         if answer == "back":
@@ -96,17 +118,17 @@ def main() -> None:
                 continue
             previous = labelled_this_session.pop()
             snippets = with_label(snippets, previous, None)
-            save_gold(snippets, path)
+            save_gold(snippets, args.path)
             position -= 1
             print(f"Cleared the label for {previous}; showing it again.")
             continue
 
         snippets = with_label(snippets, snippet.id, answer)
         labelled_this_session.append(snippet.id)
-        save_gold(snippets, path)
+        save_gold(snippets, args.path)
         position += 1
 
-    save_gold(snippets, path)
+    save_gold(snippets, args.path)
     done = sum(1 for snippet in snippets if snippet.label is not None)
     print(f"\nDone: {done}/{len(snippets)} snippet(s) labelled. Next: `make score`.")
 
