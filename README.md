@@ -4,8 +4,8 @@
 engineering (NLP, embeddings, retrieval, LLM reasoning, evaluation) with
 quantitative finance (market data, forward returns, historical analogues).
 
-> Status: **Phases 1–2 complete; Phase 3 in progress — filing text and section
-> extraction**.
+> Status: **Phases 1–2 complete; Phase 3 in progress — events, an event study
+> and benchmark-relative returns**.
 
 ---
 
@@ -105,6 +105,9 @@ first place those events meet prices.
 - **Event study** (`app/quant/event_study.py`) — attaches forward returns to
   events and summarises them per event type: count, median, mean, hit rate and
   a t-statistic.
+- **Market-adjusted returns** (`app/quant/abnormal.py`) — forward returns net of
+  a benchmark index, so a stock that merely drifted down with the market is not
+  counted as having reacted to its filing.
 
 The baseline is deliberately dumb. It reads *"an acquisition could harm us"* in
 Risk Factors as an acquisition, and says so in its confidence weights. That is
@@ -133,8 +136,32 @@ whose nearest earlier session is more than a week away, or that fall outside the
 price history, get no anchor and are reported as `NaN` rather than borrowing a
 stale close.
 
-Still to come: labels for the golden set, a measured comparison of the rules and
-the zero-shot model below, and then embeddings + retrieval.
+### What counts as an abnormal return
+
+A raw forward return mixes the company with its market. On a day the index fell
+3%, a stock that fell 3% said nothing about its filing — yet the study would
+count that -3% as the event's return. What is attributable to the event is the
+difference (`app/quant/abnormal.py`):
+
+$$\text{abnormal\_return}_h[t] = \text{forward\_return}_h[t] - \text{benchmark\_forward\_return}_h[t]$$
+
+Both legs span the **same** sessions: the two histories are intersected before
+any return is computed, so a session the stock did not trade can never become
+one leg of the benchmark's horizon. `make study` and `make study-all` default to
+`SPY`; `BENCHMARK=none` reports raw returns instead.
+
+The adjusted frame keeps the `return_1d` / `return_5d` / `return_20d` column
+names, so it is a drop-in replacement for the raw one — a raw study and a
+market-adjusted study are two price frames, not two code paths.
+
+This removes the market and nothing else. It does **not** adjust for **beta** (a
+high-beta stock moves more than its benchmark by construction), for sector or
+factor exposure, or for volatility, and it does not make the overlapping windows
+independent. A CAPM or factor model estimated over a pre-event window is the
+next refinement, once there are enough observations to estimate one.
+
+Still to come: 8-K earnings releases to give the guidance and management-change
+classes examples, then embeddings + retrieval.
 
 ### Measuring the baseline
 
@@ -203,6 +230,7 @@ Two details the extraction code has to fight, both of which the tests cover:
 ├── backend/
 │   ├── requirements.txt         # runtime dependencies
 │   ├── requirements-dev.txt     # dev tooling (pytest, ruff, mypy, stubs)
+│   ├── requirements-ml.txt      # optional ML extras (not installed by CI)
 │   └── app/
 │       ├── __init__.py
 │       ├── evaluation/
@@ -217,6 +245,7 @@ Two details the extraction code has to fight, both of which the tests cover:
 │       │   └── sections.py      # Phase 3: text -> Part / Item sections
 │       ├── ingestion/
 │       │   ├── __init__.py
+│       │   ├── collect.py       # bulk, resumable downloads per company
 │       │   ├── market.py        # Phase 1: historical OHLCV data
 │       │   ├── sec.py           # Phase 2: SEC EDGAR filings
 │       │   └── store.py         # Phase 3: local SQLite filing index
@@ -226,19 +255,29 @@ Two details the extraction code has to fight, both of which the tests cover:
 │       │   └── zero_shot.py     # Phase 3c: NLI model as a classifier
 │       └── quant/
 │           ├── __init__.py
+│           ├── abnormal.py      # forward returns net of a benchmark index
+│           ├── corpus_study.py  # cross-issuer event study
 │           ├── event_study.py   # events + forward returns -> statistics
 │           └── returns.py       # forward-return calculations
 ├── data/                        # local data (contents are git-ignored)
+├── docs/eval-notes.md           # what the frozen golden set may be used for
 ├── tests/
 │   ├── fixtures/                # saved EDGAR JSON + HTML responses (offline)
+│   ├── test_abnormal.py
+│   ├── test_collect.py
+│   ├── test_corpus.py
 │   ├── test_event_study.py
 │   ├── test_events.py
+│   ├── test_gold.py
 │   ├── test_html.py
 │   ├── test_market.py
+│   ├── test_report.py
 │   ├── test_returns.py
+│   ├── test_review.py
 │   ├── test_sections.py
 │   ├── test_sec.py
-│   └── test_store.py
+│   ├── test_store.py
+│   └── test_zero_shot.py
 ├── conftest.py                  # puts backend/ on sys.path for pytest
 ├── pyproject.toml               # ruff / mypy / pytest configuration
 ├── Makefile                     # developer entry points
@@ -357,7 +396,7 @@ make check      # lint -> format check -> typecheck -> tests
 | `make review` | Label golden-set snippets interactively |
 | `make score` | Score the rule baseline against the labelled snippets |
 | `make compare` | Rules vs zero-shot model (needs `requirements-ml.txt`) |
-| `make study` | Event study over the local filings (real prices, few filings) |
+| `make study` | Event study for one issuer, net of `BENCHMARK` (default `SPY`; `none` for raw) |
 | `make study-all` | Cross-issuer event study over every issuer in the index |
 | `make collect` | Bulk-download filings: `make collect TICKERS="NVDA MSFT"` |
 | `make test` | Run the test suite |
@@ -399,14 +438,28 @@ the past and silently invalidate every later evaluation.
 
 ---
 
-## Next up (Phase 3b — label, then measure)
+## Next up
 
-The harness is in place; the snippets are not labelled yet. Run `make review`,
-work through the 60 snippets, then `make score` for the baseline's first
-precision and recall numbers. After that, add 8-K earnings releases to the
-corpus so the guidance classes have examples — and only then start on a Hugging
-Face model, so that "the model is better" is a measurement rather than an
-impression.
+Order matters here: each step exists to make the next one measurable.
+
+1. **8-K earnings releases** (Item 2.02 / Exhibit 99.1). 10-K and 10-Q prose
+   carries almost no forward guidance, so `guidance_raise`, `guidance_cut`,
+   `management_change` and `restructuring` have no examples — and a study that
+   only sees periodic reports sees events that barely move prices.
+2. **A benchmark set worth quoting** — rule-blind sampling, per-class balance,
+   several issuers and years, blind labelling, as specified in
+   [`docs/eval-notes.md`](docs/eval-notes.md). The current 60-snippet pool stays
+   frozen as a *debugging* set; nothing measured on it may be quoted as an
+   accuracy estimate.
+3. **Beta- and factor-adjusted returns**, estimated over a pre-event window, to
+   replace the market-adjusted difference once there are enough observations to
+   fit one.
+4. **Embeddings + retrieval** — the analogue search that turns "what usually
+   happens after events of this type" into "what happened after the events most
+   similar to *this* one".
+
+Until 1 and 2 exist, the rule baseline and the zero-shot model can be compared
+for *disagreement* (`make compare`), not scored against each other.
 
 Using what exists today, from inside `backend/`:
 
@@ -417,8 +470,8 @@ from app.extraction.events import events_to_frame, extract_events
 from app.extraction.html import html_to_text
 from app.extraction.sections import find_item, parse_sections
 from app.ingestion.market import get_market_data
+from app.quant.abnormal import add_abnormal_returns
 from app.quant.event_study import attach_forward_returns, summarise_events
-from app.quant.returns import add_forward_returns
 
 text = html_to_text(open("path/to/filing.htm", encoding="utf-8").read())
 sections = parse_sections(text)
@@ -427,6 +480,10 @@ mda = find_item(sections, "2", part="I")  # Item 2, Part I
 events = extract_events(sections, as_of=datetime(2026, 7, 26, 20, 4, tzinfo=UTC))
 frame = events_to_frame(events, ticker="NVDA")
 
-prices = add_forward_returns(get_market_data("NVDA", period="1y"))
+# Forward returns net of SPY: the market's own move is removed.
+prices = add_abnormal_returns(
+    get_market_data("NVDA", period="2y"),
+    get_market_data("SPY", period="2y"),
+)
 print(summarise_events(attach_forward_returns(frame, prices)))
 ```

@@ -19,8 +19,9 @@ Limits worth stating in any write-up:
 * large-cap US issuers only — no small caps, no ADRs, no delistings;
 * one price series per ticker, so a filing that moved the whole sector is
   counted once per issuer rather than once;
-* returns are raw, not market-adjusted. A benchmark-relative version is the
-  next step, not this one.
+* returns are benchmark-relative by default (stock move minus the benchmark's
+  move over the same sessions), which removes the market but not beta, sector
+  or factor exposure. ``--benchmark none`` reports raw returns.
 """
 
 from __future__ import annotations
@@ -41,10 +42,20 @@ def main() -> None:
     """Manual entry point: ``python -m app.quant.corpus_study``."""
     from app.ingestion import store
     from app.ingestion.market import MarketDataError, get_market_data
+    from app.quant.abnormal import (
+        DEFAULT_BENCHMARK,
+        add_abnormal_returns,
+        normalise_benchmark,
+    )
     from app.quant.returns import add_forward_returns
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--period", default="2y", help="price history window")
+    parser.add_argument(
+        "--benchmark",
+        default=DEFAULT_BENCHMARK,
+        help="index used for abnormal returns, or 'none' for raw returns",
+    )
     args = parser.parse_args()
 
     connection = store.connect()
@@ -53,6 +64,16 @@ def main() -> None:
         if companies.empty:
             print("No companies in the index; run `make collect` first.")
             return
+
+        benchmark = normalise_benchmark(args.benchmark)
+        benchmark_prices: pd.DataFrame | None = None
+        if benchmark is not None:
+            try:
+                benchmark_prices = get_market_data(benchmark, period=args.period)
+            except (MarketDataError, ValueError) as exc:
+                print(f"Benchmark {benchmark} unavailable: {exc}")
+                print("Re-run with --benchmark none to study raw returns.")
+                return
 
         frames: list[pd.DataFrame] = []
         failures: list[str] = []
@@ -66,8 +87,11 @@ def main() -> None:
                 continue
 
             try:
-                prices = add_forward_returns(
-                    get_market_data(ticker, period=args.period)
+                raw = get_market_data(ticker, period=args.period)
+                prices = (
+                    add_abnormal_returns(raw, benchmark_prices)
+                    if benchmark_prices is not None
+                    else add_forward_returns(raw)
                 )
             except (MarketDataError, ValueError) as exc:
                 print(f"  {ticker:6} skipped: {exc}")
@@ -97,9 +121,15 @@ def main() -> None:
         f"\nIndependent observations: {dates} distinct event date(s) across "
         f"{usable} event(s)."
     )
+    basis = (
+        f"abnormal versus {benchmark}"
+        if benchmark_prices is not None
+        else "raw (no benchmark)"
+    )
     print(
-        "Still not a market-wide study: large caps only, raw returns, and "
-        "sector-wide moves are counted once per issuer."
+        f"Returns are {basis}. Still not a market-wide study: large caps only, "
+        "and beta, sector and factor exposure are unadjusted, so a sector-wide "
+        "move shows up once per issuer."
     )
     if failures:
         print(f"Price data unavailable for: {', '.join(failures)}")
