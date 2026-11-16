@@ -175,14 +175,14 @@ disagreement.
 `proposed` is never used for scoring. If it were, the rules would be graded
 against themselves and the numbers would be meaningless.
 
-> **Status: the set is frozen as a debugging set.** 24 of 60 snippets are
+> **Status: the set is frozen as a debugging set.** All 60 snippets are now
 > labelled, and the pool was mined by rule vocabulary from one issuer — so its
 > numbers diagnose the rules but do not estimate performance. See
-> [`docs/eval-notes.md`](docs/eval-notes.md) for what may and may not be claimed. The value of the set is
-precisely where a human disagrees with the rules: on the current pool the
-baseline already proposes `acquisition` for *"property, equipment and intangible
-assets acquired but not paid for"* and `divestiture` for *"identified for
-retirement or disposition"*.
+> [`docs/eval-notes.md`](docs/eval-notes.md) for what may and may not be
+> claimed. The value of the set is precisely where a human disagrees with the
+> rules: on the current pool the baseline proposes `acquisition` for *"property,
+> equipment and intangible assets acquired but not paid for"* and `divestiture`
+> for *"identified for retirement or disposition"*.
 
 Known gap in the pool: 10-Ks and 10-Qs contain almost no forward-guidance
 language, so `guidance_raise`, `guidance_cut`, `management_change` and
