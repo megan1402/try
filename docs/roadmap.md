@@ -24,31 +24,43 @@ to test. Precision work has since cut events by 91%.
 | 9 | Bulk collector | `app/ingestion/collect.py` |
 | 10 | Detector precision filters | `app/extraction/precision.py` |
 | 11 | 8-K exhibit collection | `sec.list_exhibits`, `collect --exhibits` |
+| 12 | 8-K press releases collected | 60 filings; **no guidance found** |
+| 13 | Study re-run on filtered events | no significant effect |
 
 ---
 
 ## Next: finish the corpus
 
-### 12. Collect 8-K earnings releases
-**Produces:** press releases (EX-99.1) for 10 issuers, where guidance language
-actually lives.
+### 12. Collect 8-K earnings releases — **done, with a negative finding**
+**Produces:** press releases (EX-99.1) for 10 issuers.
 **Done when:** `make collect TICKERS="..." FORMS="8-K" LIMIT=6` downloads
-exhibits, and `make index` shows them.
+exhibits, and `make index` shows them. ✅ 60 collected, 0 failures.
 
-### 13. Re-run the event study on the cleaner corpus
-**Produces:** per-class abnormal returns with guidance classes populated for the
-first time.
-**Done when:** `make study-all` prints non-zero `n_dates` for `guidance_raise`
-and `guidance_cut`.
-**Decision point:** if a class survives benchmark adjustment, clustering and the
-null comparison, that is the first real finding. If nothing does, the negative
-result is now much stronger than before.
+**Finding (2026-11-19):** these 10 mega-caps do **not** give numeric guidance in
+their press releases. Apple's release reports results, a dividend and a
+forward-looking-statements disclaimer; Tesla's only "forecast" is a
+supply-chain risk ("we will need to accurately forecast, purchase and warehouse
+components"). After filtering that, `guidance_raise` and `guidance_cut` have
+**zero** events across 336 documents.
 
-### 14. Widen the corpus
+**Decision:** drop `guidance_*` from the study rather than manufacture events.
+Guidance lives in earnings-call transcripts and investor decks, not SEC filings;
+that is a different pipeline with its own licensing questions, and it is not on
+the critical path. The classes with data — acquisition, legal, restructuring,
+divestiture — are enough to answer the project's question.
+
+### 13. Re-run the event study on the cleaner corpus — **done**
+**Produces:** per-class abnormal returns with the precision filters applied.
+**Done when:** `make study-all` runs on the filtered events. ✅
+**Result:** no class survives benchmark adjustment, clustering and the null
+comparison. See `docs/event-study-methodology.md`.
+
+### 14. Widen the corpus — **next**
 **Produces:** 30–50 issuers, 3 years, so each class has 100+ independent dates.
 **Done when:** `make study-all` reports ≥100 distinct dates per major class.
 **Why:** 52 dates cannot support a per-class claim, and ten mega-caps file
-within days of each other.
+within days of each other. This is the binding constraint, not the missing
+guidance class.
 
 ---
 
