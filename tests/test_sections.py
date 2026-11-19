@@ -6,14 +6,18 @@ realistic markup; inline text documents isolate the individual heuristics.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 
+from app.extraction.events import extract_events
 from app.extraction.html import html_to_text
-from app.extraction.sections import Section, find_item, parse_sections
+from app.extraction.sections import Section, as_sections, find_item, parse_sections
 
 FIXTURES = Path(__file__).parent / "fixtures"
+
+AS_OF = datetime(2026, 7, 26, 20, 4, tzinfo=UTC)
 
 FIXTURE_TEXT = html_to_text((FIXTURES / "filing_10q.html").read_text(encoding="utf-8"))
 
@@ -179,3 +183,38 @@ def test_duplicate_item_keeps_the_occurrence_with_the_most_text():
 def test_non_string_input_is_rejected():
     with pytest.raises(TypeError):
         parse_sections(None)
+
+
+# --- Documents without item headings ---------------------------------------
+
+
+def test_as_sections_returns_parsed_sections_when_there_are_any():
+    text = "Item 7. MD&A\n" + "x" * 200
+
+    assert [section.key for section in as_sections(text)] == ["item_7"]
+
+
+def test_as_sections_falls_back_to_the_whole_document():
+    """A press release has no item headings, so it becomes one section."""
+    text = "Apple reports third quarter results\nRevenue was $109.4 billion."
+
+    sections = as_sections(text)
+
+    assert len(sections) == 1
+    assert sections[0].key == "item_document"
+    assert sections[0].text == text
+
+
+def test_as_sections_of_empty_text_is_empty():
+    assert as_sections("   ") == []
+
+
+def test_events_can_be_extracted_from_a_press_release():
+    text = (
+        "We expect fourth quarter revenue of $54.0 billion, plus or minus 2%. "
+        "We raised our full-year guidance for fiscal 2027."
+    )
+
+    events = extract_events(as_sections(text), as_of=AS_OF)
+
+    assert {event.event_type for event in events} == {"guidance_raise"}

@@ -122,6 +122,23 @@ def test_accounting_noise_list_is_documented():
     assert "property and equipment" in ACCOUNTING_NOISE
 
 
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        "We will need to accurately forecast, purchase and warehouse components.",
+        "We must forecast demand accurately to avoid excess inventory.",
+    ],
+)
+def test_forecasting_as_an_activity_is_not_guidance(sentence: str):
+    assert is_accounting_noise("forecast", sentence)
+
+
+def test_a_real_guidance_sentence_is_not_noise():
+    assert not is_accounting_noise(
+        "guidance", "We raised our full-year guidance for fiscal 2027."
+    )
+
+
 # --- Subject and object ----------------------------------------------------
 
 

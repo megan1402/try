@@ -65,6 +65,8 @@ HYPOTHETICAL_MARKERS: Final[tuple[str, ...]] = (
     "may ",
     "might",
     "would",
+    "will need to",
+    "will be required to",
     "if we",
     "if our",
     "in the event",
@@ -75,6 +77,17 @@ HYPOTHETICAL_MARKERS: Final[tuple[str, ...]] = (
     "anticipate",
     "no assurance",
     "from time to time",
+)
+
+#: Verbs that describe the *act of forecasting* rather than a change in
+#: guidance. "We will need to accurately forecast components" is a supply-chain
+#: risk, not a guidance raise.
+FORECAST_AS_ACTIVITY: Final[tuple[str, ...]] = (
+    "accurately forecast",
+    "forecast, purchase",
+    "forecast demand",
+    "forecast, plan",
+    "forecast and",
 )
 
 #: Accounting vocabulary that looks like an event but is not one. These are
@@ -258,7 +271,9 @@ def is_accounting_noise(evidence: str, sentence: str = "") -> bool:
     noise even though the matched span is only ``acquired``.
     """
     lowered = f"{evidence} {sentence}".lower()
-    return any(phrase in lowered for phrase in ACCOUNTING_NOISE)
+    if any(phrase in lowered for phrase in ACCOUNTING_NOISE):
+        return True
+    return any(phrase in lowered for phrase in FORECAST_AS_ACTIVITY)
 
 
 def has_event_structure(event_type: str, sentence: str) -> bool:

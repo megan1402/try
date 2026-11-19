@@ -212,6 +212,44 @@ def find_item(
     return None
 
 
+def as_sections(text: str) -> list[Section]:
+    """Return the sections of ``text``, falling back to the whole document.
+
+    A 10-K or 10-Q is organised into numbered items, so :func:`parse_sections`
+    finds them. A **press release** (an 8-K's ``EX-99.1``) has no item headings
+    at all — it is a title, a few paragraphs and a disclaimer — so parsing it
+    yields nothing and every event in it would be lost.
+
+    When no item headings are found, the whole document becomes a single
+    section with ``item="document"``. That keeps the event pipeline uniform:
+    callers always get sections, and the section-based precision filters simply
+    do not apply to a document that has no sections.
+
+    Examples
+    --------
+    >>> [section.key for section in as_sections("We raised our guidance.")]
+    ['item_document']
+    """
+    sections = parse_sections(text)
+    if sections:
+        return sections
+
+    stripped = text.strip()
+    if not stripped:
+        return []
+
+    return [
+        Section(
+            part=None,
+            item="document",
+            title="document",
+            start=0,
+            end=len(text),
+            text=text,
+        )
+    ]
+
+
 def _collect_candidates(text: str) -> list[_Candidate]:
     """Scan ``text`` line by line, tracking the enclosing part."""
     candidates: list[_Candidate] = []

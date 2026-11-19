@@ -258,7 +258,7 @@ def events_from_index(
     """
     from app.extraction.events import events_to_frame, extract_events
     from app.extraction.html import html_to_text
-    from app.extraction.sections import parse_sections
+    from app.extraction.sections import as_sections
     from app.ingestion import store
 
     filings = store.get_filings(conn, cik=cik)
@@ -274,7 +274,9 @@ def events_from_index(
         if not path.exists():
             continue
 
-        sections = parse_sections(html_to_text(path.read_text(encoding="utf-8")))
+        # ``as_sections`` falls back to the whole document, so press releases
+        # (which have no item headings) are not silently skipped.
+        sections = as_sections(html_to_text(path.read_text(encoding="utf-8")))
         as_of = pd.Timestamp(str(row.acceptance_datetime)).to_pydatetime()
         events = extract_events(sections, as_of=as_of)
         used += 1
