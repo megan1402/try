@@ -173,7 +173,15 @@ def _print_keys() -> None:
 def _print_snippet(snippet: GoldSnippet, position: int, total: int) -> None:
     text = " ".join(snippet.text.split())
     print(f"[{position}/{total}] {snippet.id}")
+    if snippet.detected_type:
+        print(f"  detected: {snippet.detected_type}")
+    if snippet.ticker or snippet.section_key:
+        print(
+            f"  source:   {snippet.ticker or '?'} {snippet.section_key or ''}".rstrip()
+        )
     print(f"  {text}")
+    if snippet.context and snippet.context != text:
+        print(f"  context:  {snippet.context}")
     print(f"  proposed: {snippet.proposed or '-'}")
     if snippet.notes:
         print(f"  notes:    {snippet.notes}")

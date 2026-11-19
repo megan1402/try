@@ -43,13 +43,46 @@ DEFAULT_GOLD_PATH: Final[Path] = (
 
 @dataclass(frozen=True)
 class GoldSnippet:
-    """One snippet and, once a human has decided, its label."""
+    """One snippet and, once a human has decided, its label.
+
+    The first five fields are the original snippet format. The rest are
+    provenance for **detected events**: when a label is a verdict on something
+    the detector produced, the reviewer needs to see what was detected, where it
+    came from, and what surrounded it — otherwise "is this an acquisition?" is
+    unanswerable.
+
+    Attributes
+    ----------
+    id:
+        Stable identifier, unique within the file.
+    text:
+        The passage the reviewer reads. For a detected event this is the
+        sentence the match came from.
+    label:
+        The human verdict, or ``None`` while unlabelled.
+    proposed:
+        The detector's guess. Shown as a default, never used for scoring.
+    notes:
+        Free text from the reviewer.
+    ticker, accession_number, section_key:
+        Where the passage came from.
+    detected_type:
+        The event class the detector assigned. ``None`` for snippets that were
+        not produced by the detector.
+    context:
+        Surrounding text, so a sentence that starts mid-thought can be judged.
+    """
 
     id: str
     text: str
     label: str | None = None
     proposed: str | None = None
     notes: str = ""
+    ticker: str | None = None
+    accession_number: str | None = None
+    section_key: str | None = None
+    detected_type: str | None = None
+    context: str | None = None
 
     def __post_init__(self) -> None:
         if not self.id.strip():
@@ -100,6 +133,11 @@ def load_gold(path: Path = DEFAULT_GOLD_PATH) -> list[GoldSnippet]:
             label=_optional(payload.get("label")),
             proposed=_optional(payload.get("proposed")),
             notes=str(payload.get("notes") or ""),
+            ticker=_optional(payload.get("ticker")),
+            accession_number=_optional(payload.get("accession_number")),
+            section_key=_optional(payload.get("section_key")),
+            detected_type=_optional(payload.get("detected_type")),
+            context=_optional(payload.get("context")),
         )
         if snippet.id in seen:
             raise ValueError(f"{path.name}:{number}: duplicate id {snippet.id!r}.")

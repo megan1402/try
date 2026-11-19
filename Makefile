@@ -7,7 +7,7 @@ BIN    := $(VENV)/bin
 PY     := $(BIN)/python
 
 .DEFAULT_GOAL := help
-.PHONY: help setup test lint format typecheck check run run-sec index review unlabel score compare study study-all collect clean
+.PHONY: help setup test lint format typecheck check run run-sec index review unlabel score sample-events review-precision precision compare study study-all collect clean
 
 help: ## List available targets
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -52,6 +52,15 @@ unlabel: ## Clear one label: make unlabel ID=k007
 
 score: ## Score the rule baseline against the labelled snippets
 	cd backend && ../$(PY) -m app.evaluation.report
+
+sample-events: ## Build the stratified precision sample from detected events
+	cd backend && ../$(PY) -m app.evaluation.sample_events
+
+review-precision: ## Label the precision sample
+	cd backend && ../$(PY) -m app.evaluation.review tests/fixtures/events_precision.jsonl
+
+precision: ## Per-class precision with Wilson confidence intervals
+	cd backend && ../$(PY) -m app.evaluation.precision_report
 
 compare: ## Compare the rule baseline with the zero-shot model (needs requirements-ml)
 	cd backend && ../$(PY) -m app.models.compare
