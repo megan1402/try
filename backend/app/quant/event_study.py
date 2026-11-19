@@ -296,33 +296,19 @@ def main() -> None:
 
     ``python -m app.quant.event_study --ticker NVDA --cik 1045810``
 
-    Forward returns are benchmark-relative by default; pass ``--benchmark none``
-    to study raw returns instead. For every issuer at once, use
-    :mod:`app.quant.corpus_study`.
+    For every issuer at once, use :mod:`app.quant.corpus_study`.
     """
     import argparse
 
     from app.ingestion import store
-    from app.ingestion.market import MarketDataError, get_market_data
-    from app.quant.abnormal import (
-        DEFAULT_BENCHMARK,
-        add_abnormal_returns,
-        normalise_benchmark,
-    )
+    from app.ingestion.market import get_market_data
     from app.quant.returns import add_forward_returns
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--ticker", required=True, help="e.g. NVDA")
     parser.add_argument("--cik", required=True, help="e.g. 1045810")
     parser.add_argument("--period", default="2y", help="price history window")
-    parser.add_argument(
-        "--benchmark",
-        default=DEFAULT_BENCHMARK,
-        help="index used for abnormal returns, or 'none' for raw returns",
-    )
     args = parser.parse_args()
-
-    benchmark = normalise_benchmark(args.benchmark)
 
     connection = store.connect()
     try:
@@ -336,29 +322,10 @@ def main() -> None:
         print(f"No events across {used} local filing(s); run `make collect` first.")
         return
 
-    try:
-        raw = get_market_data(args.ticker, period=args.period)
-    except (MarketDataError, ValueError) as exc:
-        print(f"Price data unavailable for {args.ticker}: {exc}")
-        return
-
-    if benchmark is None:
-        prices = add_forward_returns(raw)
-        basis = "raw"
-    else:
-        try:
-            prices = add_abnormal_returns(
-                raw, get_market_data(benchmark, period=args.period)
-            )
-        except (MarketDataError, ValueError) as exc:
-            print(f"Benchmark {benchmark} unavailable: {exc}")
-            print("Re-run with --benchmark none to study raw returns.")
-            return
-        basis = f"abnormal versus {benchmark}"
-
+    prices = add_forward_returns(get_market_data(args.ticker, period=args.period))
     joined = attach_forward_returns(events_frame, prices)
 
-    print(f"{used} filing(s) -> {len(events_frame)} event(s); returns are {basis}")
+    print(f"{used} filing(s) -> {len(events_frame)} event(s)")
     print(summarise_events(joined).to_string(index=False, float_format="%.3f"))
 
     distinct_dates, usable_events = independence_counts(joined)

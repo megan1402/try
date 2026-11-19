@@ -1,9 +1,19 @@
-"""Cross-issuer event study over the whole local corpus.
+"""Cross-issuer event study over the whole local corpus, with controls.
 
 The single-issuer study answers *"what happened to this company after its
 events?"*. That is one observation per filing date and cannot support a claim.
 This module answers the question the project actually asks — *"what usually
-happens after events of this type?"* — by pooling every collected issuer.
+happens after events of this type?"* — by pooling every collected issuer, and
+then applies the three controls from :mod:`app.quant.controls`:
+
+1. **Benchmark adjustment** — every event return has the benchmark's return over
+   the same window subtracted, so a market-wide move cannot masquerade as an
+   event effect.
+2. **Clustering** — events sharing an anchor date are averaged into one
+   observation, so the sample size is the number of dates, not the number of
+   events.
+3. **Null distribution** — the same statistics on randomly chosen non-filing
+   days, seeded, so "is this different from an ordinary day?" has an answer.
 
 The number to watch is **distinct event dates**, not events:
 
@@ -11,25 +21,33 @@ The number to watch is **distinct event dates**, not events:
     two dozen events across two dozen filings are twenty-four
 
 Pooling is where look-ahead discipline pays off. Each event was anchored on the
-last close before its own `acceptance_datetime`, so pooling issuers does not
-mix in any information the market did not have.
+last close before its own `acceptance_datetime`, and the benchmark is aligned to
+that same anchor date, so no window mixes in information the market did not
+have.
 
 Limits worth stating in any write-up:
 
 * large-cap US issuers only — no small caps, no ADRs, no delistings;
 * one price series per ticker, so a filing that moved the whole sector is
   counted once per issuer rather than once;
-* returns are benchmark-relative by default (stock move minus the benchmark's
-  move over the same sessions), which removes the market but not beta, sector
-  or factor exposure. ``--benchmark none`` reports raw returns.
+* the benchmark is a single index, so a sector-wide move is only partly removed.
 """
 
 from __future__ import annotations
 
 import argparse
 
+import numpy as np
 import pandas as pd
 
+from app.quant.controls import (
+    DEFAULT_SEED,
+    abnormal_returns,
+    cluster_by_date,
+    cluster_t_stat,
+    compare_to_null,
+    null_distribution,
+)
 from app.quant.event_study import (
     attach_forward_returns,
     events_from_index,
@@ -37,26 +55,30 @@ from app.quant.event_study import (
     summarise_events,
 )
 
+#: Default benchmark for abnormal returns.
+DEFAULT_BENCHMARK = "SPY"
+
 
 def main() -> None:
     """Manual entry point: ``python -m app.quant.corpus_study``."""
     from app.ingestion import store
     from app.ingestion.market import MarketDataError, get_market_data
-    from app.quant.abnormal import (
-        DEFAULT_BENCHMARK,
-        add_abnormal_returns,
-        normalise_benchmark,
-    )
     from app.quant.returns import add_forward_returns
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--period", default="2y", help="price history window")
-    parser.add_argument(
-        "--benchmark",
-        default=DEFAULT_BENCHMARK,
-        help="index used for abnormal returns, or 'none' for raw returns",
-    )
+    parser.add_argument("--benchmark", default=DEFAULT_BENCHMARK)
+    parser.add_argument("--samples", type=int, default=1_000, help="null draws")
+    parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     args = parser.parse_args()
+
+    try:
+        benchmark_prices = add_forward_returns(
+            get_market_data(args.benchmark, period=args.period)
+        )
+    except (MarketDataError, ValueError) as exc:
+        print(f"Benchmark {args.benchmark} unavailable: {exc}")
+        return
 
     connection = store.connect()
     try:
@@ -65,17 +87,8 @@ def main() -> None:
             print("No companies in the index; run `make collect` first.")
             return
 
-        benchmark = normalise_benchmark(args.benchmark)
-        benchmark_prices: pd.DataFrame | None = None
-        if benchmark is not None:
-            try:
-                benchmark_prices = get_market_data(benchmark, period=args.period)
-            except (MarketDataError, ValueError) as exc:
-                print(f"Benchmark {benchmark} unavailable: {exc}")
-                print("Re-run with --benchmark none to study raw returns.")
-                return
-
         frames: list[pd.DataFrame] = []
+        nulls: list[pd.DataFrame] = []
         failures: list[str] = []
 
         for row in companies.itertuples(index=False):
@@ -87,11 +100,8 @@ def main() -> None:
                 continue
 
             try:
-                raw = get_market_data(ticker, period=args.period)
-                prices = (
-                    add_abnormal_returns(raw, benchmark_prices)
-                    if benchmark_prices is not None
-                    else add_forward_returns(raw)
+                prices = add_forward_returns(
+                    get_market_data(ticker, period=args.period)
                 )
             except (MarketDataError, ValueError) as exc:
                 print(f"  {ticker:6} skipped: {exc}")
@@ -100,6 +110,19 @@ def main() -> None:
 
             joined = attach_forward_returns(events, prices)
             dates, usable = independence_counts(joined)
+
+            # The null must avoid the event windows, or it samples the very
+            # days being tested.
+            event_dates = joined["event_date"].dropna().unique()
+            nulls.append(
+                null_distribution(
+                    prices,
+                    exclude_dates=list(event_dates),
+                    n_samples=args.samples,
+                    seed=args.seed,
+                )
+            )
+
             print(
                 f"  {ticker:6} {used:3} filing(s)  {len(events):3} event(s)  "
                 f"{dates:3} independent date(s)"
@@ -116,23 +139,57 @@ def main() -> None:
     dates, usable = independence_counts(joined)
 
     print(f"\n{len(frames)} issuer(s), {len(joined)} event(s)")
+    print("\n--- raw returns (no controls) ---")
     print(summarise_events(joined).to_string(index=False, float_format="%.3f"))
+
+    adjusted = abnormal_returns(joined, benchmark_prices)
+    clustered = cluster_by_date(adjusted)
+    null = pd.concat(nulls, ignore_index=True)
+
+    print(f"\n--- benchmark-adjusted, clustered by date (vs {args.benchmark}) ---")
+    print(_cluster_table(clustered).to_string(index=False, float_format="%.3f"))
+
+    print(f"\n--- event median vs null distribution ({len(null)} draws) ---")
+    print(compare_to_null(clustered, null).to_string(index=False, float_format="%.3f"))
+
     print(
         f"\nIndependent observations: {dates} distinct event date(s) across "
         f"{usable} event(s)."
     )
-    basis = (
-        f"abnormal versus {benchmark}"
-        if benchmark_prices is not None
-        else "raw (no benchmark)"
-    )
     print(
-        f"Returns are {basis}. Still not a market-wide study: large caps only, "
-        "and beta, sector and factor exposure are unadjusted, so a sector-wide "
-        "move shows up once per issuer."
+        "Significance is only claimed where the empirical p-value survives "
+        "benchmark adjustment, clustering and the null comparison."
     )
     if failures:
         print(f"Price data unavailable for: {', '.join(failures)}")
+
+
+def _cluster_table(clustered: pd.DataFrame) -> pd.DataFrame:
+    """Per-class summary of the clustered abnormal returns.
+
+    ``n_dates`` is the sample size; ``t_stat`` uses those dates as independent
+    observations, which is the whole point of clustering.
+    """
+    rows: list[dict[str, object]] = []
+
+    for event_type, group in clustered.groupby("event_type", sort=True):
+        for horizon in (1, 5, 20):
+            values = group[f"return_{horizon}d"].dropna().to_numpy(dtype=float)
+            rows.append(
+                {
+                    "event_type": event_type,
+                    "horizon_days": horizon,
+                    "n_dates": int(values.size),
+                    "median": float(np.median(values)) if values.size else float("nan"),
+                    "mean": float(values.mean()) if values.size else float("nan"),
+                    "hit_rate": (
+                        float((values > 0).mean()) if values.size else float("nan")
+                    ),
+                    "t_stat": cluster_t_stat(values),
+                }
+            )
+
+    return pd.DataFrame(rows)
 
 
 if __name__ == "__main__":

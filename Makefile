@@ -56,11 +56,11 @@ score: ## Score the rule baseline against the labelled snippets
 compare: ## Compare the rule baseline with the zero-shot model (needs requirements-ml)
 	cd backend && ../$(PY) -m app.models.compare
 
-study: ## Event study over the local filings (TICKER=NVDA CIK=1045810 BENCHMARK=SPY)
-	cd backend && ../$(PY) -m app.quant.event_study --ticker $(or $(TICKER),NVDA) --cik $(or $(CIK),1045810) $(if $(BENCHMARK),--benchmark $(BENCHMARK),)
+study: ## Event study over the local filings (TICKER=NVDA CIK=1045810)
+	cd backend && ../$(PY) -m app.quant.event_study --ticker $(or $(TICKER),NVDA) --cik $(or $(CIK),1045810)
 
-study-all: ## Cross-issuer event study over every issuer (BENCHMARK=SPY|none)
-	cd backend && ../$(PY) -m app.quant.corpus_study $(if $(BENCHMARK),--benchmark $(BENCHMARK),)
+study-all: ## Cross-issuer event study with controls (BENCHMARK=SPY SAMPLES=1000)
+	cd backend && ../$(PY) -m app.quant.corpus_study --benchmark $(or $(BENCHMARK),SPY) --samples $(or $(SAMPLES),1000)
 
 collect: ## Download filings: make collect TICKERS="NVDA MSFT" [LIMIT=5]
 	@test -n "$(TICKERS)" || { echo 'usage: make collect TICKERS="NVDA MSFT" [LIMIT=5]'; exit 1; }
