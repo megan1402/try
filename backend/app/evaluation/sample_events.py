@@ -48,8 +48,13 @@ def collect_events() -> list[DetectedEvent]:
     connection = store.connect()
     try:
         filings = store.get_filings(connection)
+        companies = store.get_companies(connection)
     finally:
         connection.close()
+
+    # One lookup table, not one query per event: the corpus has hundreds of
+    # filings and reconnecting for each would dominate the runtime.
+    tickers = dict(zip(companies["cik"], companies["ticker"], strict=True))
 
     events: list[DetectedEvent] = []
     for row in filings.itertuples(index=False):
@@ -64,12 +69,13 @@ def collect_events() -> list[DetectedEvent]:
         text = html_to_text(path.read_text(encoding="utf-8"))
         sections = as_sections(text)
         as_of = _as_of(row.acceptance_datetime)
+        ticker = tickers.get(str(row.cik), str(row.cik))
 
         for event in extract_events(sections, as_of=as_of):
             events.append(
                 from_filing_event(
                     event,
-                    ticker=_ticker_for(str(row.cik)),
+                    ticker=ticker,
                     accession_number=str(row.accession_number),
                     text=text,
                 )
@@ -81,20 +87,6 @@ def collect_events() -> list[DetectedEvent]:
 def _as_of(value: object) -> datetime:
     """Parse an acceptance timestamp into a timezone-aware datetime."""
     return pd.Timestamp(str(value)).to_pydatetime()
-
-
-def _ticker_for(cik: str) -> str:
-    """Map a CIK back to a ticker using the index, falling back to the CIK."""
-    from app.ingestion import store
-
-    connection = store.connect()
-    try:
-        companies = store.get_companies(connection)
-    finally:
-        connection.close()
-
-    match = companies[companies["cik"] == cik]
-    return str(match.iloc[0]["ticker"]) if not match.empty else str(cik)
 
 
 def main() -> None:
