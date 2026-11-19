@@ -32,6 +32,7 @@ from typing import Final
 
 import pandas as pd
 
+from app.extraction.precision import sentence_around, should_keep
 from app.extraction.sections import Section
 
 #: Event classes the baseline can recognise.
@@ -58,6 +59,7 @@ EVENT_COLUMNS: Final[tuple[str, ...]] = (
     "start",
     "end",
     "evidence",
+    "sentence",
 )
 
 
@@ -79,9 +81,14 @@ class FilingEvent:
     section_key:
         Section the match was found in, e.g. ``"part_i_item_2"``.
     evidence:
-        The matched text itself, whitespace-collapsed.
+        The matched text itself, whitespace-collapsed. Often just the trigger
+        word, so it is not enough on its own to audit a decision.
     as_of:
         When the filing became public. Must be timezone-aware.
+    sentence:
+        The full sentence the match came from, whitespace-collapsed. This is
+        what a human reads to check the decision, and what the precision
+        filters judged.
     """
 
     event_type: str
@@ -91,6 +98,7 @@ class FilingEvent:
     section_key: str
     evidence: str
     as_of: datetime
+    sentence: str = ""
 
     def __post_init__(self) -> None:
         if self.event_type not in EVENT_TYPES:
@@ -205,6 +213,7 @@ def extract_events(
     sections: Sequence[Section],
     *,
     as_of: datetime,
+    apply_precision_filters: bool = True,
 ) -> list[FilingEvent]:
     """Detect events in ``sections``, attributing them to ``as_of``.
 
@@ -215,6 +224,11 @@ def extract_events(
     as_of:
         When the filing became public — EDGAR's ``acceptance_datetime``, not
         ``filing_date``. Must be timezone-aware.
+    apply_precision_filters:
+        Apply :func:`app.extraction.precision.should_keep` to every candidate.
+        On by default: without it the rules match bare vocabulary and produce
+        hundreds of false positives per filing. Set to ``False`` only to
+        reproduce the original baseline.
 
     Returns
     -------
@@ -232,14 +246,28 @@ def extract_events(
     for section in sections:
         for rule in _RULES:
             for match in rule.pattern.finditer(section.text):
+                evidence = _collapse(match.group(0))
+                sentence = _collapse(
+                    sentence_around(section.text, match.start(), match.end())
+                )
+
+                if apply_precision_filters and not should_keep(
+                    event_type=rule.event_type,
+                    section_key=section.key,
+                    sentence=sentence,
+                    evidence=evidence,
+                ):
+                    continue
+
                 event = FilingEvent(
                     event_type=rule.event_type,
                     confidence=rule.confidence,
                     start=section.start + match.start(),
                     end=section.start + match.end(),
                     section_key=section.key,
-                    evidence=_collapse(match.group(0)),
+                    evidence=evidence,
                     as_of=as_of,
+                    sentence=sentence,
                 )
                 key = (section.key, rule.event_type)
                 current = best.get(key)
@@ -276,6 +304,7 @@ def events_to_frame(
             "section_key": event.section_key,
             "start": event.start,
             "end": event.end,
+            "sentence": event.sentence,
             "evidence": event.evidence,
         }
         for event in events

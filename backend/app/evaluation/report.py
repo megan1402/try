@@ -64,10 +64,14 @@ def predict_label(text: str) -> str:
 
     The rubric is one label per snippet, so several matches collapse to the
     highest-confidence type; ties break alphabetically to stay deterministic.
+
+    The snippet is placed in a neutral section: a bare snippet has no section
+    context, so the section-based precision filters must not apply. Otherwise
+    every snippet would be judged as if it came from Item 1 of a 10-Q.
     """
     section = Section(
         part=None,
-        item="1",
+        item="snippet",
         title="snippet",
         start=0,
         end=len(text),

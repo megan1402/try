@@ -99,9 +99,15 @@ first place those events meet prices.
 - **Event detection** (`app/extraction/events.py`) — a **rule-based baseline**:
   regexes for guidance raise/cut, beat/miss, acquisitions, divestitures,
   management changes, restructuring and legal or regulatory language. Every
-  event carries a fixed confidence, absolute character offsets and a
-  timezone-aware `as_of` (EDGAR's `acceptance_datetime`) — an event without a
-  precise instant cannot be used for point-in-time analysis.
+  event carries a fixed confidence, absolute character offsets, the sentence it
+  came from, and a timezone-aware `as_of` (EDGAR's `acceptance_datetime`) — an
+  event without a precise instant cannot be used for point-in-time analysis.
+- **Precision filters** (`app/extraction/precision.py`) — section suppression
+  (financial statements and risk factors produce no events), hypothetical
+  language, accounting vocabulary, and a subject-and-object test. These cut the
+  corpus from 2 439 events to 220; see
+  [`docs/detector-precision.md`](docs/detector-precision.md) for what that does
+  and does not prove.
 - **Event study** (`app/quant/event_study.py`) — attaches forward returns to
   events and summarises them per event type: count, median, mean, hit rate and
   a t-statistic.

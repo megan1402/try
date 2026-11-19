@@ -139,15 +139,35 @@ def test_different_types_in_the_same_section_are_reported_separately():
 def test_the_same_type_in_two_sections_yields_two_events():
     sections = [
         make_section("We raised our guidance.", start=0, part="I", item="2"),
-        make_section("We also raised our guidance.", start=100, part="II", item="1A"),
+        make_section("We also raised our guidance.", start=100, part="II", item="2"),
     ]
 
     events = extract_events(sections, as_of=AS_OF)
 
     assert [event.section_key for event in events] == [
         "part_i_item_2",
-        "part_ii_item_1a",
+        "part_ii_item_2",
     ]
+
+
+def test_risk_factors_do_not_produce_events():
+    """Item 1A is hypothetical by construction, so it is filtered out."""
+    sections = [
+        make_section("We raised our guidance.", start=0, part="II", item="1A"),
+    ]
+
+    assert extract_events(sections, as_of=AS_OF) == []
+
+
+def test_precision_filters_can_be_disabled():
+    """The original baseline is still reachable for comparison."""
+    sections = [
+        make_section("We raised our guidance.", start=0, part="II", item="1A"),
+    ]
+
+    events = extract_events(sections, as_of=AS_OF, apply_precision_filters=False)
+
+    assert [event.event_type for event in events] == ["guidance_raise"]
 
 
 def test_events_are_sorted_by_position():
