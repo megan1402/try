@@ -37,6 +37,7 @@ from app.ingestion.sec import (
     document_path,
     download_document,
     get_cik,
+    list_exhibits,
     list_filings,
     save_document,
 )
@@ -46,6 +47,10 @@ logger = logging.getLogger(__name__)
 #: Requests per second. SEC asks for at most 10; half of that is polite and
 #: leaves room for clock drift in the sleep.
 DEFAULT_REQUESTS_PER_SECOND = 5.0
+
+#: Exhibit types fetched alongside each filing. ``EX-99.1`` is the press release
+#: attached to an 8-K — the primary document is usually just a cover page.
+DEFAULT_EXHIBIT_TYPES: tuple[str, ...] = ("EX-99.1",)
 
 
 @dataclass(frozen=True)
@@ -94,6 +99,8 @@ def collect_company(
     fetch_listing: Callable[[str | int, Sequence[str]], pd.DataFrame] | None = None,
     fetch_document: Callable[[str], str] | None = None,
     resolve_cik: Callable[[str], str] | None = None,
+    fetch_exhibits: Callable[[str | int, str], pd.DataFrame] | None = None,
+    exhibit_types: Sequence[str] = DEFAULT_EXHIBIT_TYPES,
 ) -> CollectionSummary:
     """Download every listed filing for ``ticker`` that is not already on disk.
 
@@ -113,8 +120,12 @@ def collect_company(
         do not sleep. :func:`throttle` builds the production one.
     root:
         Directory the documents are written under.
-    fetch_listing, fetch_document, resolve_cik:
+    fetch_listing, fetch_document, resolve_cik, fetch_exhibits:
         Injected for tests; they default to the real EDGAR functions.
+    exhibit_types:
+        Exhibit types fetched alongside each filing. ``EX-99.1`` is the press
+        release attached to an 8-K, which is where earnings guidance lives —
+        the primary document of an 8-K is usually a cover page.
 
     Returns
     -------
@@ -134,6 +145,7 @@ def collect_company(
     listing_fn = fetch_listing or list_filings
     document_fn = fetch_document or download_document
     cik_fn = resolve_cik or get_cik
+    exhibits_fn = fetch_exhibits or list_exhibits
 
     cik = cik_fn(ticker)
     store.upsert_company(conn, ticker, cik)
@@ -171,6 +183,19 @@ def collect_company(
         store.mark_saved(conn, accession, saved)
         downloaded += 1
 
+        # Exhibits are best-effort: a missing press release must not fail the
+        # filing that carries it.
+        failed += _collect_exhibits(
+            cik=cik,
+            accession=accession,
+            exhibits_fn=exhibits_fn,
+            document_fn=document_fn,
+            sleep=sleep,
+            root=root,
+            exhibit_types=exhibit_types,
+            ticker=ticker,
+        )
+
     return CollectionSummary(
         ticker=ticker.strip().upper(),
         cik=cik,
@@ -181,6 +206,48 @@ def collect_company(
     )
 
 
+def _collect_exhibits(
+    *,
+    cik: str,
+    accession: str,
+    exhibits_fn: Callable[[str | int, str], pd.DataFrame],
+    document_fn: Callable[[str], str],
+    sleep: Callable[[], None],
+    root: Path,
+    exhibit_types: Sequence[str],
+    ticker: str,
+) -> int:
+    """Download the exhibits of one filing; return how many failed."""
+    if not exhibit_types:
+        return 0
+
+    try:
+        sleep()
+        exhibits = exhibits_fn(cik, accession)
+    except SecDataError as exc:
+        logger.warning("%s %s exhibits: %s", ticker, accession, exc)
+        return 1
+
+    failures = 0
+    for exhibit in exhibits.itertuples(index=False):
+        filename = str(exhibit.filename)
+        target = document_path(cik, accession, filename, root)
+        if target.exists():
+            continue
+
+        try:
+            sleep()
+            text = document_fn(str(exhibit.url))
+        except SecDataError as exc:
+            logger.warning("%s %s %s: %s", ticker, accession, filename, exc)
+            failures += 1
+            continue
+
+        save_document(text, cik, accession, filename, root)
+
+    return failures
+
+
 def collect(
     tickers: Sequence[str],
     *,
@@ -189,6 +256,7 @@ def collect(
     limit: int | None = None,
     requests_per_second: float = DEFAULT_REQUESTS_PER_SECOND,
     root: Path = DEFAULT_RAW_DIR,
+    exhibit_types: Sequence[str] = DEFAULT_EXHIBIT_TYPES,
 ) -> list[CollectionSummary]:
     """Collect several companies into one index, returning their summaries."""
     conn = store.connect(index_path)
@@ -206,6 +274,7 @@ def collect(
                     limit=limit,
                     pause=sleep,
                     root=root,
+                    exhibit_types=exhibit_types,
                 )
             except SecDataError as exc:
                 logger.error("%s: %s", ticker, exc)
@@ -245,6 +314,12 @@ def main() -> None:
         default=DEFAULT_REQUESTS_PER_SECOND,
         help="requests per second (SEC allows at most 10)",
     )
+    parser.add_argument(
+        "--exhibits",
+        nargs="*",
+        default=list(DEFAULT_EXHIBIT_TYPES),
+        help="exhibit types to fetch (default: EX-99.1); pass none to disable",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -256,6 +331,7 @@ def main() -> None:
         forms=tuple(args.forms),
         limit=args.limit,
         requests_per_second=args.rps,
+        exhibit_types=tuple(args.exhibits),
     )
 
     print()

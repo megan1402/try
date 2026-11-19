@@ -69,6 +69,7 @@ def run(
     limit: int | None = None,
     failing: set[str] | None = None,
     pause=None,
+    exhibits: pd.DataFrame | None = None,
 ):
     accessions = accessions or ["acc-1", "acc-2"]
     calls: list[str] = []
@@ -86,8 +87,24 @@ def run(
         fetch_listing=lambda cik, forms: make_listing(accessions),
         fetch_document=fake_fetcher(calls, failing=failing),
         resolve_cik=lambda ticker: "0001045810",
+        fetch_exhibits=lambda cik, accession: (
+            exhibits if exhibits is not None else make_exhibits()
+        ),
     )
     return summary, calls, pauses
+
+
+def make_exhibits(*filenames: str) -> pd.DataFrame:
+    """An empty exhibit table by default, so tests never touch the network."""
+    rows = [
+        {
+            "document_type": "EX-99.1",
+            "filename": filename,
+            "url": f"https://example.test/{filename}",
+        }
+        for filename in filenames
+    ]
+    return pd.DataFrame(rows, columns=["document_type", "filename", "url"])
 
 
 # --- Downloading -----------------------------------------------------------
@@ -181,8 +198,9 @@ def test_negative_limit_is_rejected(conn: sqlite3.Connection, tmp_path: Path):
 def test_every_network_request_is_paced(conn: sqlite3.Connection, tmp_path: Path):
     _, _, pauses = run(conn, tmp_path)
 
-    # One pause before the listing plus one per document.
-    assert len(pauses) == 3
+    # One pause before the listing, one per document, and one per exhibit
+    # lookup — the index page is a request too.
+    assert len(pauses) == 5
 
 
 def test_throttle_returns_a_callable(monkeypatch: pytest.MonkeyPatch):

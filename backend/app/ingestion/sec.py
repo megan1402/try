@@ -32,6 +32,7 @@ from typing import Any
 
 import pandas as pd
 import requests
+from bs4 import BeautifulSoup
 
 logger = logging.getLogger(__name__)
 
@@ -308,6 +309,117 @@ def save_document(
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")
     return path
+
+
+def filing_index_url(cik: str | int, accession_number: str) -> str:
+    """Return the URL of a filing's document index.
+
+    The index lists every document in the submission with its type, so it is
+    how exhibits are discovered: an 8-K's useful text is usually in
+    ``EX-99.1``, not in the primary document.
+    """
+    if not accession_number.strip():
+        raise ValueError("accession_number must be a non-empty string.")
+
+    cik_path = str(int(normalize_cik(cik)))
+    accession_path = accession_number.replace("-", "")
+    return f"{ARCHIVES_URL}/{cik_path}/{accession_path}/{accession_number}-index.htm"
+
+
+def parse_filing_index(html: str) -> pd.DataFrame:
+    """Parse a filing index page into a table of documents.
+
+    Returns one row per document with ``sequence``, ``document_type``,
+    ``filename`` and ``description``. Rows that are not documents (the
+    "complete submission text file" row, XBRL metadata) are dropped, because
+    they are never the text we want.
+
+    Raises
+    ------
+    ValueError
+        If ``html`` is not a string.
+    """
+    if not isinstance(html, str):
+        raise TypeError(f"html must be a string, got {type(html).__name__}.")
+
+    soup = BeautifulSoup(html, "lxml")
+    rows: list[dict[str, str]] = []
+
+    for table_row in soup.find_all("tr"):
+        cells = [cell.get_text(" ", strip=True) for cell in table_row.find_all("td")]
+        if len(cells) < 4:
+            continue
+
+        sequence, description, filename, document_type = cells[:4]
+
+        # The document cell carries a trailing marker ("nvda-20261117.htm
+        # iXBRL"), so take the first token that looks like a filename.
+        filename = next(
+            (token for token in filename.split() if "." in token),
+            "",
+        )
+        if not filename:
+            continue
+        if document_type.upper().startswith(("EX-101", "XML", "GRAPHIC")):
+            continue
+        if "complete submission" in description.lower():
+            continue
+
+        rows.append(
+            {
+                "sequence": sequence,
+                "document_type": document_type,
+                "filename": filename,
+                "description": description,
+            }
+        )
+
+    return pd.DataFrame(
+        rows, columns=["sequence", "document_type", "filename", "description"]
+    )
+
+
+def list_exhibits(
+    cik: str | int,
+    accession_number: str,
+    *,
+    document_types: Sequence[str] = ("EX-99.1",),
+) -> pd.DataFrame:
+    """List the exhibits of a filing whose type is in ``document_types``.
+
+    Parameters
+    ----------
+    cik:
+        Company CIK.
+    accession_number:
+        Filing accession number, e.g. ``"0001045810-26-000088"``.
+    document_types:
+        Exhibit types to keep. ``EX-99.1`` is the press release attached to an
+        8-K, which is where earnings guidance actually appears.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Rows with ``document_type``, ``filename`` and ``url``.
+
+    Raises
+    ------
+    SecDataError
+        If the index cannot be retrieved.
+    """
+    index_html = download_document(filing_index_url(cik, accession_number))
+    documents = parse_filing_index(index_html)
+
+    wanted = {document_type.strip().upper() for document_type in document_types}
+    selected = documents[documents["document_type"].str.upper().isin(wanted)].copy()
+
+    cik_path = str(int(normalize_cik(cik)))
+    accession_path = accession_number.replace("-", "")
+    selected["url"] = [
+        f"{ARCHIVES_URL}/{cik_path}/{accession_path}/{filename}"
+        for filename in selected["filename"]
+    ]
+    return selected.reset_index(drop=True)
 
 
 def main() -> None:

@@ -62,9 +62,11 @@ study: ## Event study over the local filings (TICKER=NVDA CIK=1045810)
 study-all: ## Cross-issuer event study with controls (BENCHMARK=SPY SAMPLES=1000)
 	cd backend && ../$(PY) -m app.quant.corpus_study --benchmark $(or $(BENCHMARK),SPY) --samples $(or $(SAMPLES),1000)
 
-collect: ## Download filings: make collect TICKERS="NVDA MSFT" [LIMIT=5]
-	@test -n "$(TICKERS)" || { echo 'usage: make collect TICKERS="NVDA MSFT" [LIMIT=5]'; exit 1; }
-	cd backend && ../$(PY) -m app.ingestion.collect $(TICKERS) $(if $(LIMIT),--limit $(LIMIT),)
+collect: ## Download filings: make collect TICKERS="NVDA MSFT" [FORMS="8-K"] [LIMIT=5]
+	@test -n "$(TICKERS)" || { echo 'usage: make collect TICKERS="NVDA MSFT" [FORMS="8-K"] [LIMIT=5]'; exit 1; }
+	cd backend && ../$(PY) -m app.ingestion.collect $(TICKERS) \
+		$(if $(FORMS),--forms $(FORMS),) \
+		$(if $(LIMIT),--limit $(LIMIT),)
 
 clean: ## Remove caches and build artefacts
 	rm -rf .pytest_cache .mypy_cache .ruff_cache

@@ -371,6 +371,7 @@ make check      # lint -> format check -> typecheck -> tests
 | `make study` | Event study over the local filings (real prices, few filings) |
 | `make study-all` | Cross-issuer event study with controls (benchmark, clustering, null) |
 | `make collect` | Bulk-download filings: `make collect TICKERS="NVDA MSFT"` |
+| `make collect FORMS="8-K"` | Also fetch 8-K press releases (EX-99.1) |
 | `make test` | Run the test suite |
 | `make lint` | `ruff check` + `ruff format --check` (no edits) |
 | `make format` | Auto-fix lint issues and reformat in place |
