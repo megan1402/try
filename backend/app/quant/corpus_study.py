@@ -70,6 +70,12 @@ def main() -> None:
     parser.add_argument("--benchmark", default=DEFAULT_BENCHMARK)
     parser.add_argument("--samples", type=int, default=1_000, help="null draws")
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
+    parser.add_argument(
+        "--min-dates",
+        type=int,
+        default=10,
+        help="skip classes with fewer independent dates than this",
+    )
     args = parser.parse_args()
 
     try:
@@ -150,16 +156,40 @@ def main() -> None:
     print(_cluster_table(clustered).to_string(index=False, float_format="%.3f"))
 
     print(f"\n--- event median vs null distribution ({len(null)} draws) ---")
-    print(compare_to_null(clustered, null).to_string(index=False, float_format="%.3f"))
+    comparison = compare_to_null(clustered, null)
+    print(comparison.to_string(index=False, float_format="%.3f"))
 
     print(
         f"\nIndependent observations: {dates} distinct event date(s) across "
         f"{usable} event(s)."
     )
-    print(
-        "Significance is only claimed where the empirical p-value survives "
-        "benchmark adjustment, clustering and the null comparison."
-    )
+
+    # A class with a handful of dates cannot support a claim, however small its
+    # p-value looks. Say so explicitly rather than leaving it to the reader.
+    underpowered = comparison[comparison["n_dates"] < args.min_dates]
+    if not underpowered.empty:
+        classes = sorted(underpowered["event_type"].unique())
+        print(
+            f"Underpowered (fewer than {args.min_dates} dates, not interpretable): "
+            f"{', '.join(classes)}"
+        )
+
+    survivors = comparison[
+        (comparison["p_value"] < 0.05) & (comparison["n_dates"] >= args.min_dates)
+    ]
+    if survivors.empty:
+        print(
+            "No class survives the controls at p < 0.05 with adequate sample "
+            "size. That is the result, not a failure to find one."
+        )
+    else:
+        print("Classes surviving the controls (p < 0.05, adequate sample):")
+        print(
+            survivors[
+                ["event_type", "horizon_days", "n_dates", "event_median", "p_value"]
+            ].to_string(index=False, float_format="%.3f")
+        )
+
     if failures:
         print(f"Price data unavailable for: {', '.join(failures)}")
 
