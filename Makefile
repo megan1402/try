@@ -57,7 +57,7 @@ sample-events: ## Build the stratified precision sample from detected events
 	cd backend && ../$(PY) -m app.evaluation.sample_events
 
 review-precision: ## Label the precision sample
-	cd backend && ../$(PY) -m app.evaluation.review tests/fixtures/events_precision.jsonl
+	cd backend && ../$(PY) -m app.evaluation.review ../tests/fixtures/events_precision.jsonl
 
 precision: ## Per-class precision with Wilson confidence intervals
 	cd backend && ../$(PY) -m app.evaluation.precision_report
