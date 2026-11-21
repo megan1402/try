@@ -81,22 +81,35 @@ See `docs/precision-result.md`.
 market — it is evidence that the detector finds almost no real events. Whether
 real filing events predict returns remains **untested**.
 
-### 16. Build a rule-blind benchmark — **next, and now the critical path**
+### 16. Build a rule-blind benchmark — **done**
 **Produces:** a labelled set sampled from filing passages rather than rule hits,
 so **recall** becomes measurable for the first time.
 **Done when:** passages are sampled independently of the detector, labelled
-blind, and precision *and* recall are reported per class.
-**Why this moved up:** precision alone cannot tell you whether the detector
-misses most real events. With precision at 5.5%, recall is the missing half of
-the picture.
+blind, and precision *and* recall are reported per class. ✅ 516 passages
+sampled, 38 event-bearing ones filtered for labelling.
 
-### 17. Score the zero-shot model against the same labels
+### 17. Establish recall — **next**
+**Produces:** the missing half of the extraction measurement.
+**Done when:** `make recall-events` reports recall on event-bearing passages.
+**Why first:** without it, "the detector is bad" is a guess about which half is
+bad.
+
+### 18. Score the zero-shot model against the same labels
 **Produces:** a measured answer to "would a model do better than 5.5%?"
-**Done when:** `app/models/zero_shot.py` is scored on the labelled set and the
-result is recorded next to the rule baseline.
-**Why:** if a model cannot clear 5.5%, keyword and zero-shot approaches are both
-insufficient and the project needs a fine-tuned classifier or a different event
-definition.
+**Done when:** `app/models/zero_shot.py` is scored on the 149 labelled events
+and the 38 passages, and the result is recorded next to the rule baseline.
+
+### 19. Inspect the errors and build a taxonomy
+**Produces:** the failure modes the next architecture must handle.
+**Done when:** every false positive and false negative has a recorded cause.
+
+### 20. Prototype: candidate generator + LLM verifier + temporal validation
+**Produces:** an extractor that can plausibly clear the 5.5% floor.
+**Done when:** precision and recall are both measured on the labelled sets.
+**Spec:** `docs/next-experiment.md`.
+
+**Not doing:** fine-tuning. 149 labels is not enough, and the failure modes are
+not yet characterised well enough to know what to train on.
 
 ---
 
