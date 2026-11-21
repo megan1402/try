@@ -26,6 +26,8 @@ to test. Precision work has since cut events by 91%.
 | 11 | 8-K exhibit collection | `sec.list_exhibits`, `collect --exhibits` |
 | 12 | 8-K press releases collected | 60 filings; **no guidance found** |
 | 13 | Study re-run on filtered events | no significant effect |
+| 14 | Corpus widened to 41 issuers | 516 documents, 118 event dates |
+| 15 | Precision measured | **0.055 pooled** — detector is the bottleneck |
 
 ---
 
@@ -66,23 +68,35 @@ guidance class.
 
 ## Then: measure the detector
 
-### 15. Label a sample of the surviving events
+### 15. Label a sample of the surviving events — **done**
 **Produces:** the first real precision number for the rules.
 **Done when:** 100–150 events labelled, `make score` reports precision/recall
-per class.
-**Why now:** the set is small (220 events), so this is tractable — unlike the
-earlier 60-snippet pool, which was rule-mined and biased.
+per class. ✅ 149 labelled.
 
-### 16. Build a proper benchmark set
-**Produces:** a rule-blind, class-balanced, multi-issuer labelled set.
-**Done when:** sampling is random over prose (not rule hits), each class has
-12–15 examples, and labelling is blind to `proposed`.
-**Spec:** `docs/eval-notes.md`, "Why it was frozen".
+**Result (2026-11-21): pooled precision 0.055 [0.028, 0.104].** Of 149 detected
+events, 8 were real. Acquisition 0.076, legal 0.105, five classes at 0.000.
+See `docs/precision-result.md`.
 
-### 17. Beat the baseline with a model
-**Produces:** a measured comparison, not an impression.
-**Done when:** a fine-tuned classifier beats the rule baseline on the benchmark
-set, with the test split untouched during training.
+**Consequence:** the negative event-study result is not evidence about the
+market — it is evidence that the detector finds almost no real events. Whether
+real filing events predict returns remains **untested**.
+
+### 16. Build a rule-blind benchmark — **next, and now the critical path**
+**Produces:** a labelled set sampled from filing passages rather than rule hits,
+so **recall** becomes measurable for the first time.
+**Done when:** passages are sampled independently of the detector, labelled
+blind, and precision *and* recall are reported per class.
+**Why this moved up:** precision alone cannot tell you whether the detector
+misses most real events. With precision at 5.5%, recall is the missing half of
+the picture.
+
+### 17. Score the zero-shot model against the same labels
+**Produces:** a measured answer to "would a model do better than 5.5%?"
+**Done when:** `app/models/zero_shot.py` is scored on the labelled set and the
+result is recorded next to the rule baseline.
+**Why:** if a model cannot clear 5.5%, keyword and zero-shot approaches are both
+insufficient and the project needs a fine-tuned classifier or a different event
+definition.
 
 ---
 
