@@ -78,6 +78,18 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    # Check the index before touching the network: an empty corpus should say so
+    # immediately, not after a failed price download.
+    connection = store.connect()
+    try:
+        companies = store.get_companies(connection)
+    finally:
+        connection.close()
+
+    if companies.empty:
+        print("No companies in the index; run `make collect` first.")
+        return
+
     try:
         benchmark_prices = add_forward_returns(
             get_market_data(args.benchmark, period=args.period)
@@ -88,11 +100,6 @@ def main() -> None:
 
     connection = store.connect()
     try:
-        companies = store.get_companies(connection)
-        if companies.empty:
-            print("No companies in the index; run `make collect` first.")
-            return
-
         frames: list[pd.DataFrame] = []
         nulls: list[pd.DataFrame] = []
         failures: list[str] = []
