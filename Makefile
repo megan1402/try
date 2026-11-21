@@ -7,7 +7,7 @@ BIN    := $(VENV)/bin
 PY     := $(BIN)/python
 
 .DEFAULT_GOAL := help
-.PHONY: help setup test lint format typecheck check run run-sec index review unlabel score sample-events review-precision precision compare study study-all collect clean
+.PHONY: help setup test lint format typecheck check run run-sec index review unlabel score sample-events review-precision precision relabel compare study study-all collect clean
 
 help: ## List available targets
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -61,6 +61,10 @@ review-precision: ## Label the precision sample
 
 precision: ## Per-class precision with Wilson confidence intervals
 	cd backend && ../$(PY) -m app.evaluation.precision_report
+
+relabel: ## Clear labels so snippets return to the queue: make relabel IDS="ev0009 ev0011"
+	@test -n "$(IDS)" || { echo 'usage: make relabel IDS="ev0009 ev0011"'; exit 1; }
+	cd backend && ../$(PY) -m app.evaluation.relabel $(IDS)
 
 compare: ## Compare the rule baseline with the zero-shot model (needs requirements-ml)
 	cd backend && ../$(PY) -m app.models.compare

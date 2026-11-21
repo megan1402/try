@@ -53,6 +53,36 @@ snippet says "in fiscal 2024 we acquired X" and the filing is from 2026, label
 `none` and note the year. This matters because the event study anchors returns
 on the filing date; a 2024 event dated 2026 would corrupt the measurement.
 
+### The descriptive-mention rule
+
+**If the filing reports an acquisition that occurred in the filing period, label
+it `acquisition`** — even when the sentence is descriptive rather than an
+announcement.
+
+| Sentence | Label | Why |
+|---|---|---|
+| "We completed the acquisition of Acme Corp." | `acquisition` | Explicit announcement |
+| "Our acquisition of Semrush in April 2026 enhances our offerings." | `acquisition` | Real, in-period, descriptive |
+| "Sales from GMS, which was acquired on September 4, 2025, contributed $1.2B." | `acquisition` | Real, in-period, causal mention |
+| "In 2019 we acquired Mellanox." | `none` | Prior period — historical reference |
+| "Acquisitions, net of cash acquired and divestitures (516) (291)" | `none` | Cash-flow table row, no event |
+
+The distinction is **whether the event happened in the filing period**, not
+whether the sentence reads like a press release. A detector that only recognises
+announcement phrasing will miss most real acquisitions, and the rubric must not
+hide that by labelling descriptive mentions as `none`.
+
+### What is still `none`
+
+- **Buybacks**: "shares acquired under the repurchase programme" — a capital
+  return, not an acquisition.
+- **Accounting standards**: "ASC 805 requires that we evaluate whether a
+  transaction pertains to an acquisition of assets" — describes a rule.
+- **Section headings**: "Structural Changes, Acquired Brands and Newly Licensed
+  Brands" — a table of contents entry.
+- **Policy descriptions**: "cybersecurity assessments for acquired companies" —
+  describes a practice.
+
 ## How to label
 
 ```bash
