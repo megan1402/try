@@ -7,7 +7,7 @@ BIN    := $(VENV)/bin
 PY     := $(BIN)/python
 
 .DEFAULT_GOAL := help
-.PHONY: help setup test lint format typecheck check run run-sec index review unlabel score sample-events review-precision precision relabel compare study study-all collect clean
+.PHONY: help setup test lint format typecheck check run run-sec index review unlabel score sample-events review-precision precision relabel sample-passages review-passages recall compare study study-all collect clean
 
 help: ## List available targets
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -65,6 +65,15 @@ precision: ## Per-class precision with Wilson confidence intervals
 relabel: ## Clear labels so snippets return to the queue: make relabel IDS="ev0009 ev0011"
 	@test -n "$(IDS)" || { echo 'usage: make relabel IDS="ev0009 ev0011"'; exit 1; }
 	cd backend && ../$(PY) -m app.evaluation.relabel $(IDS)
+
+sample-passages: ## Build a rule-blind passage sample for recall
+	cd backend && ../$(PY) -m app.evaluation.sample_passages
+
+review-passages: ## Label the passage sample
+	cd backend && ../$(PY) -m app.evaluation.review ../tests/fixtures/passages_recall.jsonl
+
+recall: ## Recall and confusion matrix from labelled passages
+	cd backend && ../$(PY) -m app.evaluation.recall_report
 
 compare: ## Compare the rule baseline with the zero-shot model (needs requirements-ml)
 	cd backend && ../$(PY) -m app.models.compare

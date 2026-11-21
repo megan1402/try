@@ -370,6 +370,9 @@ make check      # lint -> format check -> typecheck -> tests
 | `make sample-events` | Build a stratified precision sample from detected events |
 | `make review-precision` | Label that sample |
 | `make precision` | Per-class precision with Wilson confidence intervals |
+| `make sample-passages` | Build a rule-blind passage sample (for recall) |
+| `make review-passages` | Label that sample |
+| `make recall` | Recall per class plus a confusion matrix |
 | `make compare` | Rules vs zero-shot model (needs `requirements-ml.txt`) |
 | `make study` | Event study over the local filings (real prices, few filings) |
 | `make study-all` | Cross-issuer event study with controls (benchmark, clustering, null) |
