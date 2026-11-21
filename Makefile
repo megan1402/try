@@ -7,7 +7,7 @@ BIN    := $(VENV)/bin
 PY     := $(BIN)/python
 
 .DEFAULT_GOAL := help
-.PHONY: help setup test lint format typecheck check run run-sec index review unlabel score sample-events review-precision precision relabel sample-passages review-passages recall compare study study-all collect clean
+.PHONY: help setup test lint format typecheck check run run-sec index review unlabel score sample-events review-precision precision relabel sample-passages review-passages recall filter-passages review-events recall-events compare study study-all collect clean
 
 help: ## List available targets
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -74,6 +74,15 @@ review-passages: ## Label the passage sample
 
 recall: ## Recall and confusion matrix from labelled passages
 	cd backend && ../$(PY) -m app.evaluation.recall_report
+
+filter-passages: ## Narrow the passage sample to event-bearing passages
+	cd backend && ../$(PY) -m app.evaluation.filter_passages
+
+review-events: ## Label the event-bearing passage sample
+	cd backend && ../$(PY) -m app.evaluation.review ../tests/fixtures/passages_events.jsonl
+
+recall-events: ## Recall on event-bearing passages
+	cd backend && ../$(PY) -m app.evaluation.recall_report ../tests/fixtures/passages_events.jsonl
 
 compare: ## Compare the rule baseline with the zero-shot model (needs requirements-ml)
 	cd backend && ../$(PY) -m app.models.compare
