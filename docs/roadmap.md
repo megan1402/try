@@ -98,20 +98,32 @@ this is not a precise estimate — but combined with precision 0.055 the
 conclusion is firm: the rule baseline does not detect events in either
 direction. See `docs/recall-result.md`.
 
-### 18. Score the zero-shot model against the same labels — **next**
+### 18. Score the zero-shot model against the same labels — **done**
 **Produces:** a measured answer to "would a model do better than 5.5% precision
-and 0% recall?"
-**Done when:** `app/models/zero_shot.py` is scored on the 149 labelled events
-and the 38 passages, and the result is recorded next to the rule baseline.
-**Why now:** it is the cheapest informative experiment available. If a model
-cannot beat the baseline on the same labels, keyword and zero-shot approaches
-are both insufficient.
+and 0% recall?" ✅
 
-### 19. Inspect the errors and build a taxonomy
+**Result (2026-11-22): precision 0.055 (identical), recall 0.500 (vs 0.000).**
+The model is not better, it is differently broken: it fires on 145 of 149
+snippets, so its precision is the base rate, but it caught the management change
+the rules missed. See `docs/model-result.md`.
+
+**Reading:** the model is a usable *candidate generator*, not a usable detector.
+It recognises events phrased in unanticipated ways but cannot tell event prose
+from non-event prose.
+
+### 19. Threshold the model — **next**
+**Produces:** whether the model's scores carry usable signal.
+**Done when:** a threshold sweep shows precision and recall at several cut-offs.
+**Why:** the current run takes the argmax with no minimum score, which guarantees
+it always fires. If a threshold exists with precision > 0.3 and recall > 0.3, the
+model is a viable candidate generator and the verifier prototype is justified.
+If no threshold works, the conclusion is firmer. One parameter, measured.
+
+### 20. Inspect the errors and build a taxonomy
 **Produces:** the failure modes the next architecture must handle.
 **Done when:** every false positive and false negative has a recorded cause.
 
-### 20. Prototype: candidate generator + LLM verifier + temporal validation
+### 21. Prototype: candidate generator + LLM verifier + temporal validation
 **Produces:** an extractor that can plausibly clear the 5.5% floor.
 **Done when:** precision and recall are both measured on the labelled sets.
 **Spec:** `docs/next-experiment.md`.
