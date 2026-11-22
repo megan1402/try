@@ -88,16 +88,24 @@ so **recall** becomes measurable for the first time.
 blind, and precision *and* recall are reported per class. ✅ 516 passages
 sampled, 38 event-bearing ones filtered for labelling.
 
-### 17. Establish recall — **next**
+### 17. Establish recall — **done**
 **Produces:** the missing half of the extraction measurement.
-**Done when:** `make recall-events` reports recall on event-bearing passages.
-**Why first:** without it, "the detector is bad" is a guess about which half is
-bad.
+**Done when:** `make recall-events` reports recall on event-bearing passages. ✅
 
-### 18. Score the zero-shot model against the same labels
-**Produces:** a measured answer to "would a model do better than 5.5%?"
+**Result (2026-11-22): recall 0.000 (0 of 2 real events found), and 2 false
+positives on 36 event-free passages.** With n=2 the interval is 0.000–0.793, so
+this is not a precise estimate — but combined with precision 0.055 the
+conclusion is firm: the rule baseline does not detect events in either
+direction. See `docs/recall-result.md`.
+
+### 18. Score the zero-shot model against the same labels — **next**
+**Produces:** a measured answer to "would a model do better than 5.5% precision
+and 0% recall?"
 **Done when:** `app/models/zero_shot.py` is scored on the 149 labelled events
 and the 38 passages, and the result is recorded next to the rule baseline.
+**Why now:** it is the cheapest informative experiment available. If a model
+cannot beat the baseline on the same labels, keyword and zero-shot approaches
+are both insufficient.
 
 ### 19. Inspect the errors and build a taxonomy
 **Produces:** the failure modes the next architecture must handle.
