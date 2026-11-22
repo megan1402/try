@@ -96,12 +96,50 @@ def test_predict_returns_the_highest_scoring_label():
     assert classifier.predict("We acquired Acme Corp.") == "acquisition"
 
 
-def test_predict_can_return_none():
+def test_predict_returns_the_argmax_even_when_none_scores_highest():
+    """The plain argmax always fires; abstention needs a threshold.
+
+    This is the behaviour that made the model's precision equal the base rate:
+    ``none`` scoring highest does not stop an event being returned.
+    """
     classifier = ZeroShotEventClassifier(
         classifier=fake_pipeline({NONE_LABEL: 0.72, "acquisition": 0.20})
     )
 
-    assert classifier.predict("Depreciation is computed straight-line.") == NONE_LABEL
+    assert (
+        classifier.predict("Depreciation is computed straight-line.") == "acquisition"
+    )
+
+
+def test_predict_with_threshold_can_abstain():
+    classifier = ZeroShotEventClassifier(
+        classifier=fake_pipeline({NONE_LABEL: 0.72, "acquisition": 0.20})
+    )
+
+    assert (
+        classifier.predict_with_threshold(
+            "Depreciation is computed straight-line.", threshold=0.5
+        )
+        == NONE_LABEL
+    )
+
+
+def test_predict_with_threshold_keeps_a_confident_event():
+    classifier = ZeroShotEventClassifier(
+        classifier=fake_pipeline({NONE_LABEL: 0.10, "acquisition": 0.80})
+    )
+
+    assert (
+        classifier.predict_with_threshold("We acquired Acme.", threshold=0.5)
+        == "acquisition"
+    )
+
+
+def test_predict_with_threshold_rejects_an_invalid_threshold():
+    classifier = ZeroShotEventClassifier(classifier=fake_pipeline({"acquisition": 0.9}))
+
+    with pytest.raises(ValueError, match="threshold"):
+        classifier.predict_with_threshold("anything", threshold=1.5)
 
 
 def test_predict_breaks_ties_deterministically():

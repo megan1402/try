@@ -133,10 +133,47 @@ class ZeroShotEventClassifier:
         win *no-event* rather than be forced into the nearest corporate action.
         Ties break alphabetically so the output is deterministic.
         """
+        return self.predict_with_threshold(text, threshold=0.0)
+
+    def predict_with_threshold(self, text: str, *, threshold: float) -> str:
+        """Return the best event label, or ``none`` below ``threshold``.
+
+        The argmax alone always fires: some class is always the highest-scoring,
+        so a snippet about ordinary results is still assigned an event. A
+        threshold makes abstention possible — if the best event score is below
+        ``threshold``, the answer is ``none``.
+
+        ``none`` is never returned by the argmax here; it is the fallback. That
+        is deliberate: the question is "is there an event, and which?", and the
+        threshold is the answer to the first half.
+
+        Parameters
+        ----------
+        text:
+            The passage to classify.
+        threshold:
+            Minimum score for an event to be accepted, in ``[0, 1]``. ``0.0``
+            reproduces the plain argmax.
+
+        Raises
+        ------
+        ValueError
+            If ``threshold`` is outside ``[0, 1]``.
+        """
+        if not 0.0 <= threshold <= 1.0:
+            raise ValueError(f"threshold must be within [0, 1], got {threshold!r}.")
+
         scores = self.scores(text)
-        # Highest score wins; ties go to the alphabetically first label so the
-        # output never depends on dictionary order.
-        return min(scores.items(), key=lambda item: (-item[1], item[0]))[0]
+        event_scores = {
+            label: score for label, score in scores.items() if label != NONE_LABEL
+        }
+        if not event_scores:
+            return NONE_LABEL
+
+        best_label, best_score = min(
+            event_scores.items(), key=lambda item: (-item[1], item[0])
+        )
+        return best_label if best_score >= threshold else NONE_LABEL
 
 
 def check_hypotheses() -> None:

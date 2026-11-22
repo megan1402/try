@@ -7,7 +7,7 @@ BIN    := $(VENV)/bin
 PY     := $(BIN)/python
 
 .DEFAULT_GOAL := help
-.PHONY: help setup test lint format typecheck check run run-sec index review unlabel score sample-events review-precision precision relabel sample-passages review-passages recall filter-passages review-events recall-events compare score-model study study-all collect clean
+.PHONY: help setup test lint format typecheck check run run-sec index review unlabel score sample-events review-precision precision relabel sample-passages review-passages recall filter-passages review-events recall-events compare score-model threshold study study-all collect clean
 
 help: ## List available targets
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -89,6 +89,9 @@ compare: ## Compare the rule baseline with the zero-shot model (needs requiremen
 
 score-model: ## Score the zero-shot model on the labelled sets (needs requirements-ml)
 	cd backend && ../$(PY) -m app.models.score
+
+threshold: ## Sweep the model's acceptance threshold (needs requirements-ml)
+	cd backend && ../$(PY) -m app.models.threshold
 
 study: ## Event study over the local filings (TICKER=NVDA CIK=1045810)
 	cd backend && ../$(PY) -m app.quant.event_study --ticker $(or $(TICKER),NVDA) --cik $(or $(CIK),1045810)
