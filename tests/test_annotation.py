@@ -175,21 +175,25 @@ def test_prompt_contains_the_rubric_and_the_passage():
 def test_prompt_never_reveals_the_human_label_or_detector():
     """The whole experiment depends on this.
 
-    The rubric text mentions the field names ``detected_type`` and ``proposed``
-    (it explains that they are hidden), so the check is on the *values*: the
-    snippet's label must not appear as an answer anywhere in the prompt.
+    The rubric text discusses labels and detector output (it explains that they
+    are hidden), so grepping for those words proves nothing. The real property
+    is that the *snippet's* label values never reach the prompt as an answer.
     """
     prompt = build_prompt(snippet())
 
     assert '"label": "acquisition"' not in prompt.text
-    assert "human label" not in prompt.text.lower()
-    assert "detector predicted" not in prompt.text.lower()
+    assert "detected_type: acquisition" not in prompt.text
+    assert "proposed: acquisition" not in prompt.text
     # The passage is present as content, never as an answer.
     assert "We completed the acquisition of Acme Corp." in prompt.text
 
 
 def test_prompt_is_identical_for_different_hidden_labels():
-    """Two snippets with the same text but different labels must prompt alike."""
+    """Two snippets with the same text but different labels must prompt alike.
+
+    This is the strongest form of the check: if the label leaked anywhere, the
+    two prompts would differ.
+    """
     first = build_prompt(snippet(label="acquisition", detected_type="acquisition"))
     second = build_prompt(snippet(label="none", detected_type="divestiture"))
 

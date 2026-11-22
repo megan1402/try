@@ -3,8 +3,8 @@
 The prompt is built from three parts, each versioned so a stored annotation can
 be traced back to the exact instructions that produced it:
 
-* the **rubric**, read from ``docs/precision-protocol.md`` so the LLM and the
-  human annotator work from the same document;
+* the **rubric**, read from ``docs/methodology.md`` so the LLM and the human
+  annotator work from the same document;
 * the **class list**, generated from :data:`app.annotation.schema.EVENT_CLASSES`
   so it cannot drift from the schema;
 * the **passage**, with filing metadata but *never* the human label or the
@@ -25,12 +25,15 @@ from app.annotation.schema import EVENT_CLASSES, LABEL_INDEX
 from app.evaluation.gold import GoldSnippet
 
 #: Bumped whenever the prompt text changes, so stored annotations stay traceable.
-PROMPT_VERSION: Final[str] = "2026-11-22.1"
+#: 2026-11-22.2 adds the undated-event, unclosed-transaction and heading rules
+#: to the rubric, after Phase 1 showed the model applying the rubric where it
+#: was silent.
+PROMPT_VERSION: Final[str] = "2026-11-22.2"
 
 #: The rubric the prompt embeds. Read at build time so the LLM and the human
 #: annotator cannot drift apart.
 RUBRIC_PATH: Final[Path] = (
-    Path(__file__).resolve().parents[3] / "docs" / "precision-protocol.md"
+    Path(__file__).resolve().parents[3] / "docs" / "methodology.md"
 )
 
 #: Instructions that are not part of the human rubric but are needed for
