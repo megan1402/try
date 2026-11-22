@@ -5,11 +5,14 @@
 # suite.
 #
 #   pip install -r backend/requirements-llm.txt
-#   export ANTHROPIC_API_KEY=...
-#   make annotate
+#   export DEEPSEEK_API_KEY=...      # or ANTHROPIC_API_KEY
+#   make annotate                    # PROVIDER=deepseek by default
 #
 # `pydantic` is already a transitive dependency of transformers, but it is
 # listed here because the annotation schema depends on it directly.
+#
+# `requests` is already a runtime dependency, so the DeepSeek transport adds
+# nothing to install. `anthropic` is only needed for PROVIDER=anthropic.
 
 anthropic>=0.40
 pydantic>=2.0

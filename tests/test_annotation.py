@@ -23,7 +23,13 @@ from app.annotation.compare import (
     disagreements,
     per_class_table,
 )
-from app.annotation.llm import AnnotationError, LlmAnnotator, _decode
+from app.annotation.llm import (
+    AnnotationError,
+    LlmAnnotator,
+    _decode,
+    build_transport,
+    deepseek_transport,
+)
 from app.annotation.prompt import build_prompt, class_list, rubric_version
 from app.annotation.schema import (
     EVENT_CLASSES,
@@ -383,6 +389,63 @@ def test_record_marks_ai_labels_as_unverified():
     )
 
     assert record.human_verified is False
+
+
+# --- Transports ------------------------------------------------------------
+
+
+def test_deepseek_transport_requires_a_key(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+
+    with pytest.raises(RuntimeError, match="DEEPSEEK_API_KEY"):
+        deepseek_transport()
+
+
+def test_deepseek_transport_posts_to_the_fixed_endpoint(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+    captured: dict[str, object] = {}
+
+    class FakeResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict[str, object]:
+            return {"choices": [{"message": {"content": '{"a": 1}'}}]}
+
+    def fake_post(url: str, **kwargs: object) -> FakeResponse:
+        captured["url"] = url
+        captured.update(kwargs)
+        return FakeResponse()
+
+    monkeypatch.setattr("app.annotation.llm.requests.post", fake_post)
+
+    transport = deepseek_transport()
+    result = transport("prompt")
+
+    assert result == '{"a": 1}'
+    assert captured["url"] == "https://api.deepseek.com/chat/completions"
+    headers = captured["headers"]
+    assert isinstance(headers, dict)
+    assert headers["Authorization"] == "Bearer test-key"
+    body = captured["json"]
+    assert isinstance(body, dict)
+    assert body["temperature"] == 0.0
+    assert body["response_format"] == {"type": "json_object"}
+
+
+def test_build_transport_rejects_an_unknown_provider():
+    with pytest.raises(ValueError, match="Unknown provider"):
+        build_transport("openai")
+
+
+def test_build_transport_selects_deepseek(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+
+    transport = build_transport("deepseek")
+
+    assert callable(transport)
 
 
 # --- Comparison ------------------------------------------------------------

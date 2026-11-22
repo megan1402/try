@@ -105,8 +105,8 @@ threshold: ## Sweep the model's acceptance threshold (needs requirements-ml)
 annotate-dry: ## Exercise the LLM annotation pipeline without API calls
 	cd backend && ../$(PY) -m app.annotation.run_phase1 --dry-run
 
-annotate: ## Annotate the human-labelled passages with an LLM (needs ANTHROPIC_API_KEY)
-	cd backend && ../$(PY) -m app.annotation.run_phase1
+annotate: ## Annotate the human-labelled passages with an LLM (PROVIDER=deepseek)
+	cd backend && ../$(PY) -m app.annotation.run_phase1 --provider $(or $(PROVIDER),deepseek)
 
 study: ## Event study over the local filings (TICKER=NVDA CIK=1045810)
 	cd backend && ../$(PY) -m app.quant.event_study --ticker $(or $(TICKER),NVDA) --cik $(or $(CIK),1045810)

@@ -26,7 +26,12 @@ from app.annotation.compare import (
     disagreements,
     per_class_table,
 )
-from app.annotation.llm import DEFAULT_MODEL, LlmAnnotator, anthropic_transport
+from app.annotation.llm import (
+    DEFAULT_DEEPSEEK_MODEL,
+    DEFAULT_MODEL,
+    LlmAnnotator,
+    build_transport,
+)
 from app.evaluation.gold import load_gold
 
 #: The two human-labelled sets. Both are development sets, not test sets.
@@ -64,7 +69,17 @@ def stub_transport(prompt: str) -> str:
 def main() -> None:
     """Manual entry point: ``python -m app.annotation.run_phase1``."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--model", default=DEFAULT_MODEL)
+    parser.add_argument(
+        "--provider",
+        choices=("deepseek", "anthropic"),
+        default="deepseek",
+        help="which API to call (default: deepseek)",
+    )
+    parser.add_argument(
+        "--model",
+        default=None,
+        help=f"model id (default: {DEFAULT_DEEPSEEK_MODEL} or {DEFAULT_MODEL})",
+    )
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument(
@@ -84,8 +99,12 @@ def main() -> None:
         annotator = LlmAnnotator(transport=stub_transport, attempts=1)
         model = "stub-none"
     else:
-        annotator = LlmAnnotator(transport=anthropic_transport(args.model))
-        model = args.model
+        transport = build_transport(args.provider, args.model)
+        annotator = LlmAnnotator(transport=transport)
+        model = args.model or (
+            DEFAULT_DEEPSEEK_MODEL if args.provider == "deepseek" else DEFAULT_MODEL
+        )
+        print(f"provider: {args.provider}, model: {model}")
 
     annotated, failed = annotate_batch(
         snippets,

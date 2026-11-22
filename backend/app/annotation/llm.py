@@ -7,9 +7,9 @@ maps a prompt to a JSON string, so:
 * the test suite runs offline with a fake;
 * a provider outage is a retry, not a rewrite.
 
-The default transport uses the Anthropic SDK if it is installed and
-``ANTHROPIC_API_KEY`` is set. It is imported lazily, so nothing here breaks when
-the optional dependency is absent.
+Two transports are provided: DeepSeek (OpenAI-compatible, via ``requests``) and
+Anthropic (via its SDK, imported lazily). Both are optional — nothing here breaks
+when the SDK or key is absent, because the transport is injected.
 """
 
 from __future__ import annotations
@@ -21,11 +21,21 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Final
 
+import requests
+
 from app.annotation.schema import Annotation, parse_annotation
 
 #: Default model. Chosen for rubric-following and structured output, not for
 #: benchmark scores.
 DEFAULT_MODEL: Final[str] = "claude-sonnet-4-5"
+
+#: DeepSeek's OpenAI-compatible endpoint. Fixed, not configurable: the only
+#: thing a user supplies is the key.
+DEEPSEEK_BASE_URL: Final[str] = "https://api.deepseek.com/chat/completions"
+
+#: DeepSeek's general model. ``deepseek-reasoner`` is slower and better at
+#: multi-step judgement, at roughly 3x the output cost.
+DEFAULT_DEEPSEEK_MODEL: Final[str] = "deepseek-chat"
 
 #: Attempts per passage before giving up. A malformed response is retried,
 #: because the usual cause is a truncated JSON body.
@@ -147,3 +157,76 @@ def anthropic_transport(model: str = DEFAULT_MODEL) -> Transport:
         return "".join(block.text for block in response.content if block.type == "text")
 
     return transport
+
+
+def deepseek_transport(
+    model: str = DEFAULT_DEEPSEEK_MODEL,
+    *,
+    timeout: float = 120.0,
+) -> Transport:
+    """Build a transport backed by DeepSeek's OpenAI-compatible API.
+
+    Uses ``requests`` rather than an SDK: the request shape is a handful of
+    fields, and ``requests`` is already a runtime dependency, so this adds
+    nothing to install.
+
+    ``temperature=0`` makes a re-run reproducible, and
+    ``response_format={"type": "json_object"}`` asks the API for JSON, which
+    removes most of the fenced-code-block noise.
+
+    Raises
+    ------
+    RuntimeError
+        If ``DEEPSEEK_API_KEY`` is unset.
+    """
+    api_key = os.environ.get("DEEPSEEK_API_KEY")
+    if not api_key:
+        raise RuntimeError(
+            "DEEPSEEK_API_KEY is not set. Export it before running annotation."
+        )
+
+    def transport(prompt: str) -> str:
+        response = requests.post(
+            DEEPSEEK_BASE_URL,
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": model,
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0.0,
+                "max_tokens": 1024,
+                "response_format": {"type": "json_object"},
+            },
+            timeout=timeout,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        return str(payload["choices"][0]["message"]["content"])
+
+    return transport
+
+
+def build_transport(provider: str, model: str | None = None) -> Transport:
+    """Return a transport for ``provider``.
+
+    Parameters
+    ----------
+    provider:
+        ``"deepseek"`` or ``"anthropic"``.
+    model:
+        Overrides the provider's default model.
+
+    Raises
+    ------
+    ValueError
+        If ``provider`` is unknown.
+    """
+    if provider == "deepseek":
+        return deepseek_transport(model or DEFAULT_DEEPSEEK_MODEL)
+    if provider == "anthropic":
+        return anthropic_transport(model or DEFAULT_MODEL)
+    raise ValueError(
+        f"Unknown provider {provider!r}; expected 'deepseek' or 'anthropic'."
+    )
