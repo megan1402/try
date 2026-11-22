@@ -111,25 +111,37 @@ the rules missed. See `docs/model-result.md`.
 It recognises events phrased in unanticipated ways but cannot tell event prose
 from non-event prose.
 
-### 19. Threshold the model — **next**
-**Produces:** whether the model's scores carry usable signal.
-**Done when:** a threshold sweep shows precision and recall at several cut-offs.
-**Why:** the current run takes the argmax with no minimum score, which guarantees
-it always fires. If a threshold exists with precision > 0.3 and recall > 0.3, the
-model is a viable candidate generator and the verifier prototype is justified.
-If no threshold works, the conclusion is firmer. One parameter, measured.
+### 19. Threshold the model — **done**
+**Produces:** whether the model's scores carry usable signal. ✅
 
-### 20. Inspect the errors and build a taxonomy
+**Result (2026-11-22): no.** Precision peaks at **0.156** (threshold 0.5) and
+then *falls* at higher thresholds. If the scores carried signal, confidence
+would correlate with correctness; it does not. See `docs/threshold-result.md`.
+
+**Consequence:** the candidate-generator + verifier plan assumed the model could
+generate candidates. It cannot — 0.156 precision at 0.700 recall is mostly noise
+for a verifier to sift.
+
+### 20. Tune the hypotheses — **next**
+**Produces:** whether the model's ceiling is higher than this configuration.
+**Done when:** a revised `HYPOTHESES` table is measured on the same labels.
+**Why first:** the table was written once and never revised. This is cheap and
+directly tests whether the model is being used badly or is simply unsuitable.
+If a revised set cannot beat 0.156, the case for fine-tuning is much stronger.
+
+### 21. Inspect the errors and build a taxonomy
 **Produces:** the failure modes the next architecture must handle.
 **Done when:** every false positive and false negative has a recorded cause.
 
-### 21. Prototype: candidate generator + LLM verifier + temporal validation
-**Produces:** an extractor that can plausibly clear the 5.5% floor.
+### 22. Prototype: candidate generator + LLM verifier + temporal validation
+**Produces:** an extractor that can plausibly clear the 0.156 ceiling.
 **Done when:** precision and recall are both measured on the labelled sets.
-**Spec:** `docs/next-experiment.md`.
+**Spec:** `docs/next-experiment.md`, revised: the zero-shot model cannot serve as
+the candidate generator, so the generator needs to be built or the verifier needs
+to be an LLM.
 
-**Not doing:** fine-tuning. 149 labels is not enough, and the failure modes are
-not yet characterised well enough to know what to train on.
+**Not doing:** fine-tuning yet. 149 labels is not enough to train on, and the
+hypotheses have not been tuned. Both are cheap to check first.
 
 ---
 
