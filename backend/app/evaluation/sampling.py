@@ -136,6 +136,7 @@ def sample_events(
     total: int = 150,
     minimum: int = 5,
     seed: int = DEFAULT_SEED,
+    exclude: Sequence[DetectedEvent] = (),
 ) -> list[DetectedEvent]:
     """Draw a stratified sample of ``events``, seeded and reproducible.
 
@@ -149,14 +150,29 @@ def sample_events(
         Floor per non-empty class; see :func:`allocate`.
     seed:
         Seed for the random generator.
+    exclude:
+        Events already labelled elsewhere. They are removed before sampling, so
+        a second batch never re-asks about something already judged — which is
+        what makes a held-out split possible.
 
     Returns
     -------
     list[DetectedEvent]
         The sample, ordered by class then by position in ``events``.
     """
+    excluded = {
+        (event.accession_number, event.section_key, event.event_type, event.sentence)
+        for event in exclude
+    }
+    pool = [
+        event
+        for event in events
+        if (event.accession_number, event.section_key, event.event_type, event.sentence)
+        not in excluded
+    ]
+
     by_type: dict[str, list[DetectedEvent]] = {}
-    for event in events:
+    for event in pool:
         by_type.setdefault(event.event_type, []).append(event)
 
     quotas = allocate(

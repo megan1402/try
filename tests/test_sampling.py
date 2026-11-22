@@ -140,6 +140,30 @@ def test_sampling_of_nothing_is_empty():
     assert sample_events([], total=10) == []
 
 
+def test_excluded_events_are_never_sampled_again():
+    events = [make_event("acquisition", i) for i in range(20)]
+    already = events[:5]
+
+    sample = sample_events(events, total=10, exclude=already)
+
+    sampled = {e.accession_number for e in sample}
+    assert not sampled & {e.accession_number for e in already}
+
+
+def test_exclusion_leaves_enough_to_sample():
+    events = [make_event("acquisition", i) for i in range(20)]
+
+    sample = sample_events(events, total=10, exclude=events[:5])
+
+    assert len(sample) == 10
+
+
+def test_excluding_everything_yields_nothing():
+    events = [make_event("acquisition", i) for i in range(5)]
+
+    assert sample_events(events, total=10, exclude=events) == []
+
+
 # --- Snippets --------------------------------------------------------------
 
 

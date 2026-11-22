@@ -7,7 +7,7 @@ BIN    := $(VENV)/bin
 PY     := $(BIN)/python
 
 .DEFAULT_GOAL := help
-.PHONY: help setup test lint format typecheck check run run-sec index review unlabel score sample-events review-precision precision relabel sample-passages review-passages recall filter-passages review-events recall-events compare score-model threshold study study-all collect clean
+$.PHONY: help setup test lint format typecheck check run run-sec index review unlabel score sample-events sample-holdout review-holdout review-precision precision relabel sample-passages review-passages recall filter-passages review-events recall-events compare score-model threshold study study-all collect clean
 
 help: ## List available targets
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -55,6 +55,15 @@ score: ## Score the rule baseline against the labelled snippets
 
 sample-events: ## Build the stratified precision sample from detected events
 	cd backend && ../$(PY) -m app.evaluation.sample_events
+
+sample-holdout: ## Second batch, excluding already-labelled events
+	cd backend && ../$(PY) -m app.evaluation.sample_events \
+		--output ../tests/fixtures/events_holdout.jsonl \
+		--seed 20260122 \
+		--exclude ../tests/fixtures/events_precision.jsonl
+
+review-holdout: ## Label the held-out batch
+	cd backend && ../$(PY) -m app.evaluation.review ../tests/fixtures/events_holdout.jsonl
 
 review-precision: ## Label the precision sample
 	cd backend && ../$(PY) -m app.evaluation.review ../tests/fixtures/events_precision.jsonl

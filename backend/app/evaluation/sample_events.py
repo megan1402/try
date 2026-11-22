@@ -96,6 +96,13 @@ def main() -> None:
     parser.add_argument("--minimum", type=int, default=5, help="floor per class")
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument(
+        "--exclude",
+        type=Path,
+        nargs="*",
+        default=[],
+        help="golden-set files whose events must not be sampled again",
+    )
     args = parser.parse_args()
 
     events = collect_events()
@@ -103,8 +110,15 @@ def main() -> None:
         print("No events in the corpus; run `make collect` first.")
         return
 
+    # Excluding already-labelled events is what makes a second batch usable as a
+    # held-out set: no snippet is judged twice.
+    already = _labelled_events(args.exclude)
     sample = sample_events(
-        events, total=args.total, minimum=args.minimum, seed=args.seed
+        events,
+        total=args.total,
+        minimum=args.minimum,
+        seed=args.seed,
+        exclude=already,
     )
     snippets = to_snippets(sample)
     save_gold(snippets, args.output)
@@ -113,8 +127,8 @@ def main() -> None:
     for event in sample:
         counts[event.event_type] = counts.get(event.event_type, 0) + 1
 
-    print(f"{len(events)} event(s) in the corpus -> {len(sample)} sampled")
-    print(f"written to {args.output}")
+    print(f"{len(events)} event(s) in the corpus, {len(already)} excluded")
+    print(f"-> {len(sample)} sampled, written to {args.output}")
     print("\nper class:")
     for event_type in sorted(counts):
         print(f"  {event_type:22} {counts[event_type]:4}")
@@ -122,6 +136,34 @@ def main() -> None:
         "\nNext: `make review-precision` to label them, then "
         "`make precision` for per-class precision with confidence intervals."
     )
+
+
+def _labelled_events(paths: list[Path]) -> list[DetectedEvent]:
+    """Rebuild :class:`DetectedEvent` objects from already-labelled files.
+
+    Only the fields used for identity are needed, so the snippet's text and
+    provenance are enough.
+    """
+    from app.evaluation.gold import load_gold
+
+    events: list[DetectedEvent] = []
+    for path in paths:
+        if not path.exists():
+            continue
+        for snippet in load_gold(path):
+            if snippet.detected_type is None:
+                continue
+            events.append(
+                DetectedEvent(
+                    ticker=snippet.ticker or "",
+                    accession_number=snippet.accession_number or "",
+                    section_key=snippet.section_key or "",
+                    event_type=snippet.detected_type,
+                    sentence=snippet.text,
+                    context=snippet.context or "",
+                )
+            )
+    return events
 
 
 if __name__ == "__main__":
