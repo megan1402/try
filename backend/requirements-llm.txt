@@ -1,0 +1,15 @@
+# SignalForge — optional LLM extras (Phase 1 annotation).
+#
+# Deliberately NOT installed by `make setup` or CI: the annotation pipeline is
+# tested with an injected transport, so no API key or SDK is needed to run the
+# suite.
+#
+#   pip install -r backend/requirements-llm.txt
+#   export ANTHROPIC_API_KEY=...
+#   make annotate
+#
+# `pydantic` is already a transitive dependency of transformers, but it is
+# listed here because the annotation schema depends on it directly.
+
+anthropic>=0.40
+pydantic>=2.0

@@ -7,7 +7,7 @@ BIN    := $(VENV)/bin
 PY     := $(BIN)/python
 
 .DEFAULT_GOAL := help
-$.PHONY: help setup test lint format typecheck check run run-sec index review unlabel score sample-events sample-holdout review-holdout review-precision precision relabel sample-passages review-passages recall filter-passages review-events recall-events compare score-model threshold study study-all collect clean
+$.PHONY: help setup test lint format typecheck check run run-sec index review unlabel score sample-events sample-holdout review-holdout review-precision precision relabel sample-passages review-passages recall filter-passages review-events recall-events compare score-model threshold annotate-dry annotate study study-all collect clean
 
 help: ## List available targets
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -101,6 +101,12 @@ score-model: ## Score the zero-shot model on the labelled sets (needs requiremen
 
 threshold: ## Sweep the model's acceptance threshold (needs requirements-ml)
 	cd backend && ../$(PY) -m app.models.threshold
+
+annotate-dry: ## Exercise the LLM annotation pipeline without API calls
+	cd backend && ../$(PY) -m app.annotation.run_phase1 --dry-run
+
+annotate: ## Annotate the human-labelled passages with an LLM (needs ANTHROPIC_API_KEY)
+	cd backend && ../$(PY) -m app.annotation.run_phase1
 
 study: ## Event study over the local filings (TICKER=NVDA CIK=1045810)
 	cd backend && ../$(PY) -m app.quant.event_study --ticker $(or $(TICKER),NVDA) --cik $(or $(CIK),1045810)

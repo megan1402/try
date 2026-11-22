@@ -61,3 +61,9 @@ ignore_missing_imports = true
 [[tool.mypy.overrides]]
 module = ["transformers.*", "torch.*"]
 ignore_missing_imports = true
+
+# The optional LLM extras (requirements-llm.txt) are likewise absent in CI and
+# imported lazily.
+[[tool.mypy.overrides]]
+module = ["anthropic.*"]
+ignore_missing_imports = true
