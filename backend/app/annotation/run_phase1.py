@@ -6,6 +6,11 @@
 ``--dry-run`` uses a stub transport that always answers ``none``. It exists so
 the pipeline can be exercised end to end without spending money, and so the
 comparison arithmetic can be checked against a known-bad annotator.
+
+``--input`` points the run at a different labelled set, which is how the
+development partition is scored:
+
+    python -m app.annotation.run_phase1 --input ../tests/fixtures/holdout_development.jsonl
 """
 
 from __future__ import annotations
@@ -83,17 +88,25 @@ def main() -> None:
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument(
+        "--input",
+        type=Path,
+        nargs="*",
+        default=None,
+        help="labelled set(s) to annotate (default: the two development sets)",
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="use a stub annotator that always answers none",
     )
     args = parser.parse_args()
 
+    inputs = tuple(args.input) if args.input else DEFAULT_INPUTS
     snippets = []
-    for path in DEFAULT_INPUTS:
+    for path in inputs:
         snippets.extend(load_gold(path))
 
-    print(f"{len(snippets)} labelled passage(s) across {len(DEFAULT_INPUTS)} set(s)")
+    print(f"{len(snippets)} labelled passage(s) across {len(inputs)} set(s)")
 
     if args.dry_run:
         annotator = LlmAnnotator(transport=stub_transport, attempts=1)

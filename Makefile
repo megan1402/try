@@ -7,7 +7,7 @@ BIN    := $(VENV)/bin
 PY     := $(BIN)/python
 
 .DEFAULT_GOAL := help
-.PHONY: help setup test lint format typecheck check run run-sec index review unlabel score sample-events sample-holdout review-holdout split-holdout review-development review-test review-precision precision relabel sample-passages review-passages recall filter-passages review-events recall-events compare score-model threshold annotate-dry annotate study study-all collect clean
+.PHONY: help setup test lint format typecheck check run run-sec index review unlabel score sample-events sample-holdout review-holdout split-holdout review-development review-test review-precision precision relabel sample-passages review-passages recall filter-passages review-events recall-events compare score-model threshold annotate-dry annotate annotate-holdout study study-all collect clean
 
 help: ## List available targets
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -116,6 +116,12 @@ annotate-dry: ## Exercise the LLM annotation pipeline without API calls
 
 annotate: ## Annotate the human-labelled passages with an LLM (PROVIDER=deepseek)
 	cd backend && ../$(PY) -m app.annotation.run_phase1 --provider $(or $(PROVIDER),deepseek)
+
+annotate-holdout: ## Annotate the labelled development partition and compare
+	cd backend && ../$(PY) -m app.annotation.run_phase1 \
+		--provider $(or $(PROVIDER),deepseek) \
+		--input ../tests/fixtures/holdout_development.jsonl \
+		--output ../tests/fixtures/llm_holdout.jsonl
 
 study: ## Event study over the local filings (TICKER=NVDA CIK=1045810)
 	cd backend && ../$(PY) -m app.quant.event_study --ticker $(or $(TICKER),NVDA) --cik $(or $(CIK),1045810)

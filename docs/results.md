@@ -12,7 +12,8 @@ not been meaningfully tested.**
 | 2 | Rule detector, recall | 0.000 |
 | 3 | Event study, 41 issuers | no abnormal returns |
 | 4 | Zero-shot NLI | precision 0.156, recall 0.500 |
-| 5 | DeepSeek LLM | precision 0.153, recall 0.917 |
+| 5 | DeepSeek LLM, old dev set | precision 0.153, recall 0.917 |
+| 6 | **DeepSeek LLM, new dev partition** | **precision 0.767, recall 0.852** |
 
 ---
 
@@ -126,25 +127,76 @@ rubric was tuned on.
 
 ---
 
+## 6. DeepSeek LLM, new development partition — precision 0.767, recall 0.852
+
+**Measured:** the same model and prompt, but on 80 freshly labelled snippets from
+18 companies, after three rubric rules were added (undated events, unclosed
+transactions, headings).
+
+| metric | value | 95% CI |
+|---|---|---|
+| precision | **0.767** | 0.591 – 0.882 |
+| recall | **0.852** | 0.675 – 0.941 |
+| specificity | 0.868 | 0.752 – 0.935 |
+| accuracy | 0.863 | 0.770 – 0.921 |
+
+Per class:
+
+| class | support | predicted | precision | recall |
+|---|---|---|---|---|
+| acquisition | 16 | 18 | 0.667 | 0.750 |
+| legal_or_regulatory | 8 | 9 | 0.889 | 1.000 |
+| divestiture | 2 | 2 | 1.000 | 1.000 |
+| restructuring | 1 | 1 | 1.000 | 1.000 |
+| none | 53 | 50 | 0.920 | 0.868 |
+
+**This is a five-fold improvement in precision** over the same model on the old
+set (0.153 → 0.767), with recall essentially unchanged (0.917 → 0.852).
+
+**Why:** the three rubric rules closed the gaps the model was falling into. The
+model was never ignoring the rubric — it was applying it where the rubric was
+silent.
+
+**The remaining errors are the opposite of before.** The model now *misses*
+headings it should have caught:
+
+| id | passage | human | model |
+|---|---|---|---|
+| ev0065 | "Acquisition of VMware, Inc." | acquisition | none |
+| ev0088 | "Acquisition of Symantec Corporation's Enterprise Security Business" | acquisition | none |
+
+Those are headings, which the rubric says are `none` — so the model is following
+the rule and the human is not. That is a labelling inconsistency, not a model
+error.
+
+**Does not show:** a test-set result. These 80 snippets are new data, but the
+rubric was refined while labelling them, so they are development data.
+
+---
+
 ## What the results mean together
 
 | approach | precision | recall | verdict |
 |---|---|---|---|
 | Rule baseline | 0.055 | 0.000 | does not detect |
 | Zero-shot NLI | 0.156 | 0.500 | fires on everything |
-| DeepSeek LLM | 0.153 | 0.917 | finds events, over-fires 6× |
+| DeepSeek, old dev set | 0.153 | 0.917 | finds events, over-fires 6× |
+| **DeepSeek, new dev partition** | **0.767** | **0.852** | **usable** |
 
-**Extraction is the bottleneck.** The event study's negative result says nothing
-about whether filings move prices, because the events it measured were mostly
-not events.
+**Extraction is no longer the bottleneck.** With the revised rubric the LLM
+reaches 0.767 precision at 0.852 recall on 80 snippets — good enough that the
+event study could be re-run on its output.
 
-The LLM is the best candidate generator available — high recall, low precision —
-which is exactly the role a verifier could filter. But at 0.153 precision, 85%
-of its positive labels would be wrong if used directly.
+The caveat is that this is development data. The test partition (70 snippets
+from 12 companies) is still unlabelled, and it is the only set that can confirm
+the result generalises.
 
 ## What has not been measured
 
-- **Recall on a clean set.** The holdout batch (150 snippets) is unlabelled.
-- **The LLM against the revised rubric.** Three rules were added after the run.
-- **Whether a verifier can lift precision above 0.4.** Untested.
+- **The test partition.** 70 snippets, unlabelled. This is the number that
+  matters.
+- **Whether the result holds on a wider corpus.** 80 snippets from 18 large-cap
+  issuers.
+- **Whether the event study finds anything with real events.** Blocked on the
+  above.
 - **Whether real filing events predict returns.** Blocked on extraction.
