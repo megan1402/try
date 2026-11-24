@@ -149,7 +149,12 @@ def _ask(snippet: GoldSnippet) -> str | None:
         if label is not None:
             return label
 
-        print("? press 1-11, n, s, b (back), enter (accept proposal) or q to quit")
+        # Only mention "accept proposal" when there is one; otherwise the hint
+        # invites a keystroke that cannot work.
+        hint = "1-11, n, s, b (back) or q to quit"
+        if snippet.proposed:
+            hint = "1-11, n, s, b (back), enter (accept proposal) or q to quit"
+        print(f"? press {hint}")
 
 
 def _find(snippets: Sequence[GoldSnippet], snippet_id: str) -> GoldSnippet:
@@ -165,8 +170,9 @@ def _print_keys() -> None:
     for index, label in enumerate(LABELS, start=1):
         print(f"  {index}. {label}")
     print(
-        "  n = none   s = skip   enter = accept proposal\n"
+        "  n = none   s = skip\n"
         "  b = back (undo the last label)   q = save and quit\n"
+        "  enter accepts a proposal, but this sample has none — press a number.\n"
     )
 
 
