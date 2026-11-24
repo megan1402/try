@@ -7,7 +7,7 @@ BIN    := $(VENV)/bin
 PY     := $(BIN)/python
 
 .DEFAULT_GOAL := help
-$.PHONY: help setup test lint format typecheck check run run-sec index review unlabel score sample-events sample-holdout review-holdout review-precision precision relabel sample-passages review-passages recall filter-passages review-events recall-events compare score-model threshold annotate-dry annotate study study-all collect clean
+$.PHONY: help setup test lint format typecheck check run run-sec index review unlabel score sample-events sample-holdout review-holdout split-holdout review-development review-precision precision relabel sample-passages review-passages recall filter-passages review-events recall-events compare score-model threshold annotate-dry annotate study study-all collect clean
 
 help: ## List available targets
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -64,6 +64,12 @@ sample-holdout: ## Second batch, excluding already-labelled events
 
 review-holdout: ## Label the held-out batch
 	cd backend && ../$(PY) -m app.evaluation.review ../tests/fixtures/events_holdout.jsonl
+
+split-holdout: ## Split the holdout into development and test partitions, grouped by ticker
+	cd backend && ../$(PY) -m app.evaluation.split_holdout
+
+review-development: ## Label the development partition
+	cd backend && ../$(PY) -m app.evaluation.review ../tests/fixtures/holdout_development.jsonl
 
 review-precision: ## Label the precision sample
 	cd backend && ../$(PY) -m app.evaluation.review ../tests/fixtures/events_precision.jsonl
