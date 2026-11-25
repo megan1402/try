@@ -7,8 +7,6 @@ hide behind an identical bug in the score.
 
 from __future__ import annotations
 
-import math
-
 import pandas as pd
 import pytest
 
@@ -100,8 +98,8 @@ def test_a_predicted_only_class_appears_with_zero_support():
     acquisition = row(table, "acquisition")
     assert acquisition["support"] == 0
     assert acquisition["precision"] == pytest.approx(0.0)
-    assert math.isnan(acquisition["recall"])
-    assert math.isnan(acquisition["f1"])
+    assert acquisition["recall"] == pytest.approx(0.0)
+    assert acquisition["f1"] == pytest.approx(0.0)
 
 
 def test_scoring_nothing_is_an_error():
@@ -116,11 +114,11 @@ def test_macro_scores_average_only_classes_with_support():
     macro = macro_scores(table)
 
     # guidance_raise is perfect; "none" has support but was never predicted, so
-    # its precision is undefined and its recall is 0. "acquisition" was only
-    # predicted, so it has no support and is left out of the average.
-    assert macro["macro_precision"] == pytest.approx(1.0)
+    # its precision is 0 and its recall is 0. "acquisition" was only predicted,
+    # so it has no support and is left out of the average.
+    assert macro["macro_precision"] == pytest.approx(0.5)
     assert macro["macro_recall"] == pytest.approx(0.5)
-    assert macro["macro_f1"] == pytest.approx(1.0)
+    assert macro["macro_f1"] == pytest.approx(0.5)
 
 
 def test_accuracy_counts_exact_matches():

@@ -12,7 +12,6 @@ paper.
 
 from __future__ import annotations
 
-import math
 import sys
 from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
@@ -28,6 +27,7 @@ from app.evaluation.gold import (
     GoldSnippet,
     load_gold,
 )
+from app.evaluation.precision import wilson_interval
 from app.extraction.events import extract_events
 from app.extraction.sections import Section
 
@@ -205,13 +205,23 @@ def main() -> None:
 
     table = score(snippets)
     macro = macro_scores(table)
+    judged = [
+        snippet
+        for snippet in snippets
+        if snippet.label is not None and snippet.label != SKIP_LABEL
+    ]
+    correct = sum(
+        1 for snippet in judged if predict_label(snippet.text) == snippet.label
+    )
+    low, high = wilson_interval(correct, len(judged))
 
     print(f"\n{path.name}: {len(snippets)} snippet(s)")
     print(table.to_string(index=False, float_format=lambda value: f"{value:.2f}"))
     print(
         "\nmacro precision {macro_precision:.2f} | macro recall {macro_recall:.2f} "
-        "| macro F1 {macro_f1:.2f} | accuracy {accuracy:.2f}".format(
-            accuracy=accuracy(snippets), **macro
+        "| macro F1 {macro_f1:.2f} | accuracy {accuracy:.2f} "
+        "[{low:.2f}, {high:.2f}]".format(
+            accuracy=correct / len(judged), low=low, high=high, **macro
         )
     )
 
@@ -225,14 +235,18 @@ def main() -> None:
 
 
 def _ratio(numerator: int, denominator: int) -> float:
-    """``numerator / denominator``, or NaN when the denominator is zero."""
-    return numerator / denominator if denominator else float("nan")
+    """``numerator / denominator``, or 0.0 when the denominator is zero.
+
+    Zero rather than NaN: a class the detector never predicted has a precision
+    of zero, not an unknown one, and printing ``NaN`` in that cell reads as a
+    missing measurement when it is in fact the measurement. The same holds for
+    recall on a class with no support.
+    """
+    return numerator / denominator if denominator else 0.0
 
 
 def _f1(precision: float, recall: float) -> float:
-    """Harmonic mean; NaN unless both components are defined."""
-    if math.isnan(precision) or math.isnan(recall):
-        return float("nan")
+    """Harmonic mean of precision and recall."""
     total = precision + recall
     return 2 * precision * recall / total if total else 0.0
 
