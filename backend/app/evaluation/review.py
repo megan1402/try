@@ -27,6 +27,7 @@ from app.evaluation.gold import (
     unlabelled,
     with_label,
 )
+from app.extraction.events import EVENT_TYPES as EVENT_CLASSES
 
 #: What a keystroke means. ``""`` accepts the proposal, ``b`` undoes the last
 #: label, ``q`` saves and leaves.
@@ -166,13 +167,20 @@ def _find(snippets: Sequence[GoldSnippet], snippet_id: str) -> GoldSnippet:
 
 
 def _print_keys() -> None:
+    """Print the key list.
+
+    Only the event classes are numbered. ``none`` and ``skip`` are shown as
+    letters because they are not event classes — they are the absence of one and
+    an abstention — and numbering them invited the question of why ``10`` and
+    ``n`` both exist. The numbers still work for all eleven; they are just not
+    advertised for the last two.
+    """
     print("Keys:")
-    for index, label in enumerate(LABELS, start=1):
+    for index, label in enumerate(EVENT_CLASSES, start=1):
         print(f"  {index}. {label}")
     print(
-        "  n = none   s = skip\n"
+        "  n = none (no event here)   s = skip (too ambiguous to judge)\n"
         "  b = back (undo the last label)   q = save and quit\n"
-        "  enter accepts a proposal, but this sample has none — press a number.\n"
     )
 
 
