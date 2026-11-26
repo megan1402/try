@@ -39,7 +39,11 @@ PER_CLASS_COLUMNS: Final[tuple[str, ...]] = (
     "fp",
     "fn",
     "precision",
+    "precision_low",
+    "precision_high",
     "recall",
+    "recall_low",
+    "recall_high",
     "f1",
 )
 
@@ -73,7 +77,11 @@ def per_class_table(
     snippets: Sequence[GoldSnippet],
     predictions: Mapping[str, str],
 ) -> pd.DataFrame:
-    """Precision, recall and F1 per class.
+    """Precision, recall and F1 per class, with Wilson intervals.
+
+    Undefined ratios are reported as 0.0 rather than NaN. A class the model
+    never predicted has a precision of zero, not an unknown one, and NaN would
+    silently drop it from any average taken over the column.
 
     Raises
     ------
@@ -93,12 +101,12 @@ def per_class_table(
         true_positives = sum(
             1 for label, pred in pairs if label == name and pred == name
         )
-        precision = true_positives / predicted if predicted else float("nan")
-        recall = true_positives / support if support else float("nan")
+        precision = true_positives / predicted if predicted else 0.0
+        recall = true_positives / support if support else 0.0
+        precision_low, precision_high = wilson_interval(true_positives, predicted)
+        recall_low, recall_high = wilson_interval(true_positives, support)
         f1 = (
-            2 * precision * recall / (precision + recall)
-            if precision and recall and not _isnan(precision) and not _isnan(recall)
-            else float("nan")
+            2 * precision * recall / (precision + recall) if precision + recall else 0.0
         )
         rows.append(
             {
@@ -109,7 +117,11 @@ def per_class_table(
                 "fp": predicted - true_positives,
                 "fn": support - true_positives,
                 "precision": precision,
+                "precision_low": precision_low,
+                "precision_high": precision_high,
                 "recall": recall,
+                "recall_low": recall_low,
+                "recall_high": recall_high,
                 "f1": f1,
             }
         )
@@ -215,7 +227,3 @@ def disagreements(
             break
 
     return out
-
-
-def _isnan(value: float) -> bool:
-    return value != value

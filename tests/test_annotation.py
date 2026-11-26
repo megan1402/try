@@ -473,6 +473,34 @@ def test_per_class_table_counts_correctly():
     assert acquisition["precision"] == pytest.approx(0.5)
 
 
+def test_per_class_table_reports_zero_not_nan_for_an_unpredicted_class():
+    snippets = [labelled("a", "acquisition"), labelled("b", "none")]
+    predictions = {"a": "none", "b": "none"}
+
+    table = per_class_table(snippets, predictions)
+
+    acquisition = table[table["event_type"] == "acquisition"].iloc[0]
+    assert acquisition["predicted"] == 0
+    assert acquisition["precision"] == pytest.approx(0.0)
+    assert acquisition["recall"] == pytest.approx(0.0)
+    assert acquisition["f1"] == pytest.approx(0.0)
+
+
+def test_per_class_table_has_intervals():
+    snippets = [labelled("a", "acquisition"), labelled("b", "none")]
+    predictions = {"a": "acquisition", "b": "acquisition"}
+
+    table = per_class_table(snippets, predictions)
+
+    # A class with no support or no predictions has no interval to report, so
+    # only the defined rows are checked.
+    defined = table.dropna(subset=["precision_low", "recall_low"])
+    assert not defined.empty
+    for _, row in defined.iterrows():
+        assert row["precision_low"] <= row["precision"] <= row["precision_high"]
+        assert row["recall_low"] <= row["recall"] <= row["recall_high"]
+
+
 def test_binary_table_reports_event_versus_none():
     snippets = [
         labelled("a", "acquisition"),
