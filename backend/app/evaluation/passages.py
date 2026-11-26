@@ -128,7 +128,7 @@ def sample_passages(
     chosen: list[Passage] = []
 
     for ticker, accession, section_key, text in documents:
-        passages = split_passages(text)
+        passages = _unique(split_passages(text))
         if not passages:
             continue
 
@@ -177,6 +177,24 @@ def to_snippets(
         )
         for index, passage in enumerate(passages, start=1)
     ]
+
+
+def _unique(passages: Sequence[str]) -> list[str]:
+    """Drop repeated passages, keeping the first occurrence.
+
+    A long filing restates the same paragraph in several places — the MD&A
+    summary and the note it summarises, for instance. Sampling both would ask
+    the reviewer the same question twice and count one judgement as two.
+    """
+    seen: set[str] = set()
+    unique: list[str] = []
+    for passage in passages:
+        key = " ".join(passage.split())
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(passage)
+    return unique
 
 
 def _truncate(text: str) -> str:

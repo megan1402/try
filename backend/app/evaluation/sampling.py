@@ -171,6 +171,24 @@ def sample_events(
         not in excluded
     ]
 
+    # Collapse repeated sentences before sampling. Boilerplate such as "We have
+    # entered into settlement agreements with other responsible parties" appears
+    # verbatim in every filing a company files, so without this the same sentence
+    # is sampled several times and counted as several independent judgements. It
+    # is one judgement: the label does not depend on which filing quoted it.
+    #
+    # The first occurrence wins, so the retained event keeps a real accession
+    # number and the sample stays reproducible.
+    seen: set[str] = set()
+    unique: list[DetectedEvent] = []
+    for event in pool:
+        key = " ".join(event.sentence.split())
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(event)
+    pool = unique
+
     by_type: dict[str, list[DetectedEvent]] = {}
     for event in pool:
         by_type.setdefault(event.event_type, []).append(event)

@@ -123,11 +123,31 @@ def test_sampling_does_not_repeat_an_event():
 
 def test_sampling_keeps_rare_classes_represented():
     events = [make_event("acquisition", i) for i in range(200)]
-    events += [make_event("divestiture", i) for i in range(3)]
+    events += [make_event("divestiture", i) for i in range(200, 203)]
 
     sample = sample_events(events, total=50, minimum=3)
 
     assert sum(1 for e in sample if e.event_type == "divestiture") == 3
+
+
+def test_sampling_collapses_a_sentence_repeated_across_filings():
+    # The same boilerplate sentence in five filings is one judgement, not five.
+    events = [
+        DetectedEvent(
+            ticker="AMD",
+            accession_number=f"acc-{i}",
+            section_key="item_1",
+            event_type="legal_or_regulatory",
+            sentence="We have entered into settlement agreements.",
+            context="",
+        )
+        for i in range(5)
+    ]
+
+    sample = sample_events(events, total=10)
+
+    assert len(sample) == 1
+    assert sample[0].accession_number == "acc-0"
 
 
 def test_sampling_returns_everything_when_the_corpus_is_small():
